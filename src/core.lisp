@@ -14,6 +14,8 @@
                 #:add-message)
   (:import-from #:codabrus/tools/read-file
                 #:read-file)
+  (:import-from #:codabrus/tools/edit-file
+                #:edit-file)
   (:nicknames #:codabrus/core))
 (in-package #:codabrus)
 
@@ -24,6 +26,7 @@
 
 (defun test-ai (request &optional prev-state)
   (let* ((*project-dir* (or (probe-file "~/projects/ai/aider/")
+                            (probe-file "~/projects/aider/")
                             (error "Aider folder not found")))
          (state (cond
                   (prev-state
@@ -32,7 +35,8 @@
                   (t
                    (state (list (user-message request))))))
          (agent (ai-agent *system-prompt* :tools '(search-file
-                                                   read-file)))
+                                                   read-file
+                                                   edit-file)))
          (new-state (40ants-ai-agents/generics:process agent state)))
     (values
      new-state

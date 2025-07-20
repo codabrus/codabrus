@@ -7,8 +7,7 @@
   (:import-from #:serapeum
                 #:fmt
                 #:length<=)
-  (:export
-   #:read-file))
+  (:export #:read-file))
 (in-package #:codabrus/tools/read-file)
 
 

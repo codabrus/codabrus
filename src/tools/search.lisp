@@ -25,7 +25,10 @@
 (defun %search-file (term search-in ignore-files)
   (log:info "Searching" term search-in ignore-files)
   (let* ((command (append
-                   (list "/Users/art/.nix-profile/bin/rg"
+                   (list (namestring
+                          (or (probe-file "~/.nix-profile/bin/rg")
+                              (probe-file "/usr/bin/rg")
+                              (error "Ripgrep command line app not found")))
                          "--ignore-case")
                    (when (and search-in
                               (not (str:emptyp search-in)))
@@ -51,10 +54,9 @@
        (let ((length-limit 2000))
          (cond
            ((length<= length-limit output)
-            (log:info "Shortening")
             (fmt "~A
 
-MORE FILES WERE FOUND"
+MORE FILES WERE FOUND. Try to give a more specific TERM to search."
                  (str:shorten length-limit output)))
            
            (t
