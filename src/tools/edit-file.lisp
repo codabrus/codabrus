@@ -26,43 +26,40 @@ Returns the filename as a string or NIL if not found."
             target-file
             instructions)
   
-  (let ((pathname (probe-file
-                   (merge-pathnames target-file
-                                    *project-dir*))))
-    (cond
-      (pathname
-       (multiple-value-bind (output error-output exit-code)
-           (uiop:with-current-directory (*project-dir*)
-             (uiop:run-program (list "patch"
-                                     "--posix"
-                                     "--no-backup-if-mismatch"
-                                     "-p" "1")
-                               :input (list diff-patch)
-                               :output '(:string :stripped t)
-                               :error-output '(:string :stripped t)
-                               :ignore-error-status t))
-         (cond
-           ((zerop exit-code)
-            "OK")
-           (t
-            (let* ((filename (%extract-rejects-filename output))
-                   (rejected-patch (when filename
-                                     (let ((full-filename (merge-pathnames filename
-                                                                           *project-dir*)))
-                                       (prog1 (alexandria:read-file-into-string full-filename)
-                                         (uiop:delete-file-if-exists full-filename)))))
-                   (result (fmt "Diff command failed with code ~A.~@[~2%It's STDOUT:~2%```~%~A~%```~]~@[~2%It's STDERR:~2%```~%~A~%```~]~@[~2%Rejected patch:~2%```diff~%~A~%```~]"
-                                exit-code
-                                (unless (str:emptyp output)
-                                  output)
-                                (unless (str:emptyp error-output)
-                                  error-output)
-                                rejected-patch)))
-              (log:info "DIFF RESULT" result)
-              (values result))))))
-      (t
-       (fmt "File ~A NOT FOUND"
-            target-file)))))
+  (let ((pathname (merge-pathnames target-file
+                                   *project-dir*)))
+    (unless (probe-file pathname)
+      (alexandria:write-string-into-file "" pathname))
+    
+    (multiple-value-bind (output error-output exit-code)
+        (uiop:with-current-directory (*project-dir*)
+          (uiop:run-program (list "patch"
+                                  "--posix"
+                                  "--no-backup-if-mismatch"
+                                  "-p" "1")
+                            :input (list diff-patch)
+                            :output '(:string :stripped t)
+                            :error-output '(:string :stripped t)
+                            :ignore-error-status t))
+      (cond
+        ((zerop exit-code)
+         "OK")
+        (t
+         (let* ((filename (%extract-rejects-filename output))
+                (rejected-patch (when filename
+                                  (let ((full-filename (merge-pathnames filename
+                                                                        *project-dir*)))
+                                    (prog1 (alexandria:read-file-into-string full-filename)
+                                      (uiop:delete-file-if-exists full-filename)))))
+                (result (fmt "Diff command failed with code ~A.~@[~2%It's STDOUT:~2%```~%~A~%```~]~@[~2%It's STDERR:~2%```~%~A~%```~]~@[~2%Rejected patch:~2%```diff~%~A~%```~]"
+                             exit-code
+                             (unless (str:emptyp output)
+                               output)
+                             (unless (str:emptyp error-output)
+                               error-output)
+                             rejected-patch)))
+           (log:info "DIFF RESULT" result)
+           (values result)))))))
 
 
 (defun-tool edit-file ((target-file string "The path of the file to edit. You can use either a relative path in the workspace or an absolute path. If an absolute path is provided, it will be preserved as is.")
