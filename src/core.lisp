@@ -16,6 +16,8 @@
                 #:read-file)
   (:import-from #:codabrus/tools/edit-file
                 #:edit-file)
+  (:import-from #:codabrus/tools/bash
+                #:bash)
   (:nicknames #:codabrus/core))
 (in-package #:codabrus)
 
@@ -36,7 +38,8 @@
                    (state (list (user-message request))))))
          (agent (ai-agent *system-prompt* :tools '(search-file
                                                    read-file
-                                                   edit-file)))
+                                                   edit-file
+                                                   bash)))
          (new-state (40ants-ai-agents/generics:process agent state)))
     (values
      new-state

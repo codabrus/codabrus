@@ -9,7 +9,8 @@
   :pathname "t"
   :depends-on ("log4cl"
                "codabrus-tests/core"
-               "codabrus-tests/edit-file")
+               "codabrus-tests/edit-file"
+               "codabrus-tests/bash")
   :perform (test-op (op c)
                     (unless (symbol-call :rove :run c)
                       (error "Tests failed"))))
