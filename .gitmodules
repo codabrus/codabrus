@@ -1,0 +1,6 @@
+[submodule "libs/lisp-dev-mcp"]
+	path = libs/lisp-dev-mcp
+	url = git@github.com:40ants/lisp-dev-mcp.git
+[submodule "libs/ai-agents"]
+	path = libs/ai-agents
+	url = git@github.com:40ants/ai-agents.git
