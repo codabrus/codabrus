@@ -45,6 +45,18 @@ Everything that happens during agent execution is observable:
 
 The assistant distinguishes between read-only and write/execute operations. Destructive or irreversible actions (shell execution, file deletion, external API calls) require explicit user confirmation unless the user has pre-authorized them. The permission system has layers: global defaults, project configuration, session overrides, and per-request prompts. Input and output can be validated by configurable guardrail chains.
 
+## 8. Headless and Automation-Friendly
+
+The agent can run fully unattended, without a human operator present. In non-interactive (headless) mode:
+
+- No confirmation prompts are issued; tool permissions are declared upfront in configuration
+- The process exits with a meaningful code: `0` = task completed, `1` = task failed, `2` = agent could not proceed without human input
+- Output is structured (JSON Lines or plain text) suitable for CI log parsers and dashboards
+- A maximum-turns and token-budget limit prevents runaway cost on long-running jobs
+- All tool calls, results, and LLM turns are written to a structured audit log
+
+This makes Codabrus usable as a step in CI pipelines, scheduled cron jobs, and programmatic orchestration — not just interactive use.
+
 ## Technology Constraints
 
 | Concern | Library |
@@ -63,15 +75,16 @@ The assistant distinguishes between read-only and write/execute operations. Dest
 The following capabilities guide the long-term feature set. They are listed roughly in dependency order; each depends on the ones above it being solid:
 
 1. Autonomous code writing checked by tests
-2. MCP tool integration (ecosystem access)
-3. Terminal UI and Web UI
-4. Subagent delegation
-5. Per-agent LLM and prompt configuration
-6. Context compression for long sessions
-7. Context size and cost tracking
-8. Parallel sessions
-9. User skills via `SKILL.md`
-10. Agent configuration via `AGENTS.md`
-11. Agent Client Protocol (ACP) for IDE integration
-12. Language Server Protocol (LSP) for semantic code understanding
-13. Distributed tool/agent execution on remote hosts
+2. Non-interactive (headless) mode for CI pipelines and scripted automation
+3. MCP tool integration (ecosystem access)
+4. Terminal UI and Web UI
+5. Subagent delegation
+6. Per-agent LLM and prompt configuration
+7. Context compression for long sessions
+8. Context size and cost tracking
+9. Parallel sessions
+10. User skills via `SKILL.md`
+11. Agent configuration via `AGENTS.md`
+12. Agent Client Protocol (ACP) for IDE integration
+13. Language Server Protocol (LSP) for semantic code understanding
+14. Distributed tool/agent execution on remote hosts
