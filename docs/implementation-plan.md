@@ -18,7 +18,7 @@ This roadmap moves from the current working prototype toward the full architectu
 
 Goal: make the agent genuinely useful for autonomous coding on a real project. No architectural changes yet — improve what exists.
 
-### 1.1 Bash Tool
+### 1.1 Bash Tool ✓
 - Add `src/tools/bash.lisp` — run shell commands with a 30s timeout
 - No sandboxing yet; output capped at 4000 chars
 - Required permission tier: `:execute`
