@@ -1,0 +1,35 @@
+#!/bin/sh
+#|-*- mode:lisp -*-|#
+#|
+exec ros -Q -- $0 "$@"
+|#
+
+(defun extend-registry ()
+  (loop for dep-dir in (directory (merge-pathnames uiop:*wild-directory*
+                                                   (asdf:system-relative-pathname :codabrus
+                                                                                  "libs/")))
+        do (pushnew dep-dir
+                    asdf:*central-registry*
+                    :test #'uiop:pathname-equal)))
+
+
+(progn ;;init forms
+  (ros:ensure-asdf)
+
+  (extend-registry)
+  
+  #+quicklisp
+  (ql:quickload '("40ants-asdf-system"
+                  "codabrus"
+                  "codabrus/main")
+                :silent t)
+  (sb-ext:gc :full t))
+
+
+(defpackage :ros.script.codabrus
+  (:use :cl)
+  (:import-from #:codabrus/main
+                #:main))
+(in-package :ros.script.codabrus)
+
+;;; vim: set ft=lisp lisp:

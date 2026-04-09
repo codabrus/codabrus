@@ -4,3 +4,6 @@
 [submodule "libs/ai-agents"]
 	path = libs/ai-agents
 	url = git@github.com:40ants/ai-agents.git
+[submodule "libs/cl-mcp"]
+	path = libs/cl-mcp
+	url = https://github.com/cl-ai-project/cl-mcp

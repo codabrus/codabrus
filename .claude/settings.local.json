@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(qlot exec:*)"
+      "Bash(qlot exec:*)",
+      "Skill(update-config)",
+      "WebFetch(domain:localhost)",
+      "mcp__lisp-dev-mcp__eval_lisp_form"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "lisp-dev-mcp"
+  ]
 }
