@@ -1,46 +1,17 @@
 (uiop:define-package #:codabrus
   (:use #:cl)
-  (:import-from #:40ants-ai-agents/ai-agent
-                #:ai-agent)
-  (:import-from #:codabrus/vars
-                #:*project-dir*)
-  (:import-from #:40ants-ai-agents/user-message
-                #:user-message)
-  (:import-from #:40ants-ai-agents/state
-                #:state)
-  (:import-from #:codabrus/tools/search
-                #:search-file)
-  (:import-from #:40ants-ai-agents/generics
-                #:add-message)
-  (:import-from #:codabrus/tools/read-file
-                #:read-file)
-  (:import-from #:codabrus/tools/edit-file
-                #:edit-file)
-  (:import-from #:codabrus/tools/bash
-                #:bash)
+  (:import-from #:codabrus/session
+                #:make-session
+                #:run-session)
   (:nicknames #:codabrus/core))
 (in-package #:codabrus)
 
 
-(defparameter *system-prompt*
-  "You are a code assistant.")
-
-
-(defun test-ai (request &optional prev-state)
-  (let* ((*project-dir* (or (probe-file "~/projects/ai/aider/")
-                            (probe-file "~/projects/aider/")
-                            (error "Aider folder not found")))
-         (state (cond
-                  (prev-state
-                   (add-message prev-state
-                                (user-message request)))
-                  (t
-                   (state (list (user-message request))))))
-         (agent (ai-agent *system-prompt* :tools '(search-file
-                                                   read-file
-                                                   edit-file
-                                                   bash)))
-         (new-state (40ants-ai-agents/generics:process agent state)))
-    (values
-     new-state
-     (first (40ants-ai-agents/state:state-messages new-state)))))
+(defun test-ai (request &optional prev-session)
+  "Run REQUEST in a session. If PREV-SESSION is given, continue that conversation.
+   Returns the updated session."
+  (let* ((project-dir (or (probe-file "~/projects/ai/aider/")
+                          (probe-file "~/projects/aider/")
+                          (error "Aider folder not found")))
+         (session (or prev-session (make-session project-dir))))
+    (run-session session request)))

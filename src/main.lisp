@@ -23,6 +23,9 @@
        (log:warn "There is no .local-config.lisp file. Current-directory is ~A"
                  current-dir))))
 
+  (setf 40ants-ai-agents/vars:*api-key*
+        (or (uiop:getenv "DEEPSEEK_API_TOKEN")
+            (error "Set DEEPSEEK_API_TOKEN env var.")))
 
   (40ants-logging:setup-for-backend :level
                                     ;; Decided to log everything

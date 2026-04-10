@@ -57,6 +57,56 @@
 
 Это нормально для тестов — знак `%` уже сигнализирует «внутренний».
 
+## Использовать CLOS, не defstruct
+
+В этом проекте все типы данных определяются через `defclass`, не `defstruct`.
+
+### Конструктор для defclass
+
+Для каждого `defclass` нужна функция-конструктор `make-<classname>`.
+
+- Обязательные слоты → обязательные позиционные параметры.
+- Необязательные слоты → `&key` параметры, но объявленные через `&rest restargs` и переданные в `make-instance` через `apply`. Тогда не нужно указывать дефолтные значения — их задаёт сам `defclass`.
+- В сигнатуре всё равно перечислять все допустимые `&key`, затем `(declare (ignore ...))` на каждый из них — для документации и проверки компилятором.
+
+```lisp
+(defclass session ()
+  ((project-dir :initarg :project-dir
+                :reader   session-project-dir)
+   (state       :initarg  :state
+                :initform nil
+                :accessor session-state)))
+
+(defun make-session (project-dir &rest restargs &key state)
+  (declare (ignore state))
+  (apply #'make-instance 'session :project-dir project-dir restargs))
+```
+
+Почему `&rest` + `apply`, а не просто передать `state` явно:
+- Не нужно дублировать дефолт из `defclass` в конструкторе.
+- Если слот не передан — `make-instance` использует `:initform`; если передан — используется переданное значение.
+- При добавлении нового необязательного слота достаточно добавить его в `&key` список и `declare ignore`, не трогая тело функции.
+
+```lisp
+;; ПРАВИЛЬНО:
+(defclass session ()
+  ((project-dir :initarg :project-dir :reader session-project-dir)
+   (state       :initarg :state       :accessor session-state)))
+
+(make-instance 'session :project-dir #p"/tmp/" :state nil)
+
+;; НЕПРАВИЛЬНО:
+(defstruct session project-dir state)
+```
+
+Причина: `defclass` лучше совместим с CLOS (методы, наследование, MOP), что важно для будущего расширения агентов.
+
+При переопределении `defstruct` → `defclass` в живом образе необходимо удалить пакет перед перезагрузкой:
+```lisp
+(delete-package :my-package)
+(asdf:load-system "my-system" :force '("my-system/my-file"))
+```
+
 ## Вычисление Lisp-форм через MCP
 
 Вместо запуска `sbcl` через `Bash`, использовать инструмент `mcp__lisp-dev-mcp__eval_lisp_form`:

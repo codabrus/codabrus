@@ -24,7 +24,7 @@ Goal: make the agent genuinely useful for autonomous coding on a real project. N
 - Required permission tier: `:execute`
 - This enables: running tests, `git status`, compiling code
 
-### 1.2 Multi-Turn Session State (no persistence)
+### 1.2 Multi-Turn Session State (no persistence) ✓
 - Refactor `test-ai` into a `session` struct holding message history
 - `run-session(session, message) → session` — adds message, runs loop, returns updated session
 - Session survives across multiple calls in the same Lisp image
