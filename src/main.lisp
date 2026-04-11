@@ -14,7 +14,10 @@
   (:import-from #:codabrus/secrets
                 #:read-token)
   (:import-from #:codabrus/vars
-                #:*model*)
+                #:*model*
+                #:*headless-mode*
+                #:*allow-execute*
+                #:headless-permission-denied)
   (:export #:main))
 (in-package #:codabrus/main)
 
@@ -41,25 +44,37 @@
                           :short "p")
                  (model "Override the default model for this run."
                         :short "m")
+                 (non-interactive "Activate headless mode: no confirmation prompts. ~
+                                   Also activated when the CI environment variable is \"true\"."
+                                  :flag t)
+                 (allow-execute "Allow :execute tier tools (e.g. bash) in headless mode."
+                                :flag t)
                  &rest args)
   "Codabrus — hackable AI code assistant."
 
   (40ants-logging:setup-for-backend :level :debug)
   (%setup-common)
 
-  (cond
-    (prompt
-     ;; CLI mode: run one task and exit
-     (let* ((project-dir (if args
-                             (pathname (first args))
-                             (uiop:getcwd)))
-            (session (make-session project-dir)))
-       (let ((*model* (or model *model*)))
-         (let ((result (run-session session prompt)))
-           (let ((response (session-response result)))
-             (when response
-               (format t "~A~%" response)))
-           (uiop:quit 0)))))
+  (let ((*headless-mode* (or non-interactive
+                             (string= (uiop:getenv "CI") "true")))
+        (*allow-execute* allow-execute))
+    (cond
+      (prompt
+       ;; CLI mode: run one task and exit
+       (let* ((project-dir (if args
+                               (pathname (first args))
+                               (uiop:getcwd)))
+              (session (make-session project-dir)))
+         (handler-case
+             (let ((*model* (or model *model*)))
+               (let ((result (run-session session prompt)))
+                 (let ((response (session-response result)))
+                   (when response
+                     (format t "~A~%" response)))
+                 (uiop:quit 0)))
+           (headless-permission-denied (c)
+             (format *error-output* "Permission denied: ~A~%" c)
+             (uiop:quit 2)))))
     (t
      ;; Server mode: start Slynk and MCP, then loop
      (40ants-slynk:start-slynk-if-needed)
@@ -67,4 +82,4 @@
        (40ants-lisp-dev-mcp/core:start-server :port (parse-integer (uiop:getenv "MCP_PORT")))
        ;; (cl-mcp:start-http-server :port (1+ (parse-integer (uiop:getenv "MCP_PORT"))))
        )
-     (loop do (sleep 10)))))
+     (loop do (sleep 10))))))

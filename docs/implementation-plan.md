@@ -56,7 +56,7 @@ This phase is deliberately placed before session persistence and actors — it r
 - `codabrus --session <id> --prompt "..." ` — continue an existing session (once Phase 3 lands)
 - `--model <id>` — override the default model for this run
 
-### 2.2 Headless Mode Flag
+### 2.2 Headless Mode Flag ✓
 
 - `--non-interactive` flag (or detect `CI=true` env var) activates headless mode
 - In headless mode: no confirmation prompts; all tool permissions are auto-approved according to a pre-set policy (default: allow `:read` and `:write`, deny `:execute` unless `--allow-execute` is set)

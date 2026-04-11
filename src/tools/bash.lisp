@@ -3,7 +3,10 @@
   (:import-from #:completions
                 #:defun-tool)
   (:import-from #:codabrus/vars
-                #:*project-dir*)
+                #:*project-dir*
+                #:*headless-mode*
+                #:*allow-execute*
+                #:headless-permission-denied)
   (:import-from #:serapeum
                 #:fmt)
   (:import-from #:bordeaux-threads
@@ -21,6 +24,9 @@
 
 
 (defun %bash (command &key (timeout *default-timeout*))
+  (when (and *headless-mode* (not *allow-execute*))
+    (log:warn "Bash tool denied in headless mode (pass --allow-execute to enable)")
+    (error 'headless-permission-denied :tool-name "bash"))
   (log:info "Running bash command" command)
   (handler-case
       (let* ((timed-out nil)
