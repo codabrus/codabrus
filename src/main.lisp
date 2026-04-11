@@ -28,6 +28,8 @@
                 #:*headless-mode*
                 #:*allow-execute*
                 #:headless-permission-denied)
+  (:import-from #:log4cl-extras/error
+                #:with-log-unhandled)
   (:export #:main))
 (in-package #:codabrus/main)
 
@@ -94,20 +96,25 @@
               (session (make-session project-dir)))
          (handler-case
              (let* ((*model* (or model *model*))
-                    (result (let ((completions::*tool-start-hooks*
+                    (result (let ((completions::*tool-interceptor*
                                     (when json-p
-                                      (list (lambda (tool-name args)
-                                              (%emit-json-line
-                                               `((:event . "tool-call")
-                                                 (:tool . ,tool-name)
-                                                 (:args . ,args)))))))
-                                  (completions::*tool-complete-hooks*
-                                    (when json-p
-                                      (list (lambda (tool-name result)
-                                              (%emit-json-line
-                                               `((:event . "tool-result")
-                                                 (:tool . ,tool-name)
-                                                 (:result . ,result))))))))
+                                      (lambda (fn-name call-args)
+                                        (log:debug "Tool ~A is called" fn-name)
+                                        (%emit-json-line
+                                         `((:event . "tool-call")
+                                           (:tool . ,fn-name)
+                                           (:args . ,call-args)))
+                                        (with-log-unhandled ()
+                                          (let* ((fn-tool (gethash fn-name completions::*tools*))
+                                                 (tool-result
+                                                   (apply (slot-value fn-tool 'completions::fn)
+                                                          (completions::map-args-to-parameters
+                                                           fn-tool call-args))))
+                                            (%emit-json-line
+                                             `((:event . "tool-result")
+                                               (:tool . ,fn-name)
+                                               (:result . ,tool-result)))
+                                            tool-result))))))
                               (run-session session prompt))))
                ;; Text output
                (let ((response (session-response result)))
