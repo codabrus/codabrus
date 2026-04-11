@@ -7,3 +7,4 @@
 /other-code-assistants/
 /roswell/codabrus
 .secrets
+*.log

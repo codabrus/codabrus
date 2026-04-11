@@ -62,7 +62,7 @@ This phase is deliberately placed before session persistence and actors — it r
 - In headless mode: no confirmation prompts; all tool permissions are auto-approved according to a pre-set policy (default: allow `:read` and `:write`, deny `:execute` unless `--allow-execute` is set)
 - Any tool call that would normally ask the user instead logs a warning and either proceeds (if allowed) or fails the session with exit code `2`
 
-### 2.3 Exit Codes and Structured Output
+### 2.3 Exit Codes and Structured Output ✓
 
 | Code | Meaning |
 |------|---------|

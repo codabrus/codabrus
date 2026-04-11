@@ -109,7 +109,7 @@ branch for parallel exploration."))
          (turn-out     (completion-token-count completer))
          (turn-cost    (compute-turn-cost turn-in turn-out))
          (new-total-cost (+ (session-total-cost-usd session) turn-cost)))
-    (log:info "[tokens: ~A in / ~A out | cost: $~,3F]" turn-in turn-out turn-cost)
+    (log:debug "[tokens: ~A in / ~A out | cost: $~,3F]" turn-in turn-out turn-cost)
     (make-session (session-project-dir session)
                   :state final-state
                   :tokens-in  (+ (session-tokens-in session)  turn-in)
