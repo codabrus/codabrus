@@ -30,7 +30,7 @@ Goal: make the agent genuinely useful for autonomous coding on a real project. N
 - Session survives across multiple calls in the same Lisp image
 - No Sento yet; synchronous and single-threaded
 
-### 1.3 Context Tracking
+### 1.3 Context Tracking ✓
 - Count tokens in/out per LLM call (use Completions' response metadata)
 - Accumulate total cost per session
 - Print summary at end of each turn: `[tokens: 1234 in / 456 out | cost: $0.003]`

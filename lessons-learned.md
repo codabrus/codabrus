@@ -14,6 +14,24 @@
 
 В тестах это особенно важно: `"a\nb"` ≠ `"a" + #\Newline + "b"`. Из-за этого тесты с `"\n"` могут проходить по неправильной причине (обе стороны сравнения одинаково «неправильные»).
 
+## Использовать log:info вместо format для вывода
+
+Для вывода сообщений использовать `log:info` вместо `(format t ...)`. Это даёт структурированный вывод, уровни логирования и возможность перенаправить/отключить вывод без правки кода.
+
+```lisp
+;; ПРАВИЛЬНО — полностью квалифицированный символ:
+(log:info "tokens: ~A in / ~A out | cost: $~,3F" turn-in turn-out turn-cost)
+
+;; НЕПРАВИЛЬНО — format:
+(format t "~&[tokens: ~A in / ~A out | cost: $~,3F]~%" turn-in turn-out turn-cost)
+
+;; НЕПРАВИЛЬНО — импортировать символ из LOG:
+(:import-from #:log #:info)
+(info "...")
+```
+
+Писать `log:info` напрямую, без импорта. Зависимость на `log4cl` уже зарегистрирована в `codabrus.asd` через `asdf:register-system-packages`.
+
 ## ASDF package-inferred systems и log4cl
 
 Если файл использует пакет `LOG` через `log:info` без `:import-from`, ASDF не знает, что надо загрузить `log4cl`, и компиляция падает с «Package LOG does not exist».

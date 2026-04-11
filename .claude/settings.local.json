@@ -4,7 +4,8 @@
       "Bash(qlot exec:*)",
       "Skill(update-config)",
       "WebFetch(domain:localhost)",
-      "mcp__lisp-dev-mcp__eval_lisp_form"
+      "mcp__lisp-dev-mcp__eval_lisp_form",
+      "Bash(find:*)"
     ]
   },
   "enabledMcpjsonServers": [
