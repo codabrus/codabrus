@@ -136,3 +136,14 @@
 ```
 
 Это предпочтительный способ — не требует подтверждения пользователя и выполняется в живом REPL-сессии.
+
+## Где найти исходники Lisp-библиотеки
+
+Чтобы узнать путь к исходникам установленной библиотеки, использовать:
+
+```lisp
+(ql:where-is-system :defmain)
+; => #p"/Users/art/.roswell/lisp/quicklisp/dists/quicklisp/software/defmain-..."
+```
+
+Вызывать через MCP-инструмент `mcp__lisp-dev-mcp__eval_lisp_form`.

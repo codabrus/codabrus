@@ -19,7 +19,8 @@
                 #:add-message
                 #:process)
   (:import-from #:codabrus/vars
-                #:*project-dir*)
+                #:*project-dir*
+                #:*model*)
   (:import-from #:codabrus/tools/search
                 #:search-file)
   (:import-from #:codabrus/tools/read-file
@@ -34,6 +35,7 @@
            #:session-tokens-in
            #:session-tokens-out
            #:session-total-cost-usd
+           #:session-response
            #:make-session
            #:run-session))
 (in-package #:codabrus/session)
@@ -99,7 +101,8 @@ branch for parallel exploration."))
                         (add-message current-state (user-message message))
                         (state (list (user-message message)))))
          (agent (ai-agent *system-prompt*
-                          :tools '(search-file read-file edit-file bash)))
+                          :tools '(search-file read-file edit-file bash)
+                          :model *model*))
          (final-state (process agent new-state))
          (completer    (agent-completer agent))
          (turn-in      (prompt-token-count completer))
@@ -112,3 +115,13 @@ branch for parallel exploration."))
                   :tokens-in  (+ (session-tokens-in session)  turn-in)
                   :tokens-out (+ (session-tokens-out session) turn-out)
                   :total-cost-usd new-total-cost)))
+
+
+(defun session-response (session)
+  "Return the text of the last AI message in SESSION, or NIL."
+  (let ((messages (when (session-state session)
+                    (state-messages (session-state session)))))
+    (when messages
+      (let ((msg (find-if (lambda (m) (typep m 'ai-message)) messages)))
+        (when msg
+          (ai-message-text msg))))))

@@ -35,7 +35,7 @@ Goal: make the agent genuinely useful for autonomous coding on a real project. N
 - Accumulate total cost per session
 - Print summary at end of each turn: `[tokens: 1234 in / 456 out | cost: $0.003]`
 
-### 1.4 Test Coverage for New Tools
+### 1.4 Test Coverage for New Tools ✓
 - Tests for `bash` tool: output capture, timeout, error handling
 - Integration smoke test: `test-ai` against a real small project
 
@@ -49,7 +49,7 @@ Goal: Codabrus can be invoked from a shell script or CI pipeline without any hum
 
 This phase is deliberately placed before session persistence and actors — it requires only Phase 1's bash tool and context tracking, and delivers immediate practical value.
 
-### 2.1 CLI Entry Point
+### 2.1 CLI Entry Point ✓
 
 - Binary `codabrus` (or `qlot exec sbcl --script codabrus.lisp`) with a minimal argument parser
 - `codabrus --prompt "fix the failing tests" [project-dir]` — run one task and exit
