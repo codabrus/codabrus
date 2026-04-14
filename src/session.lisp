@@ -37,7 +37,8 @@
            #:session-total-cost-usd
            #:session-response
            #:make-session
-           #:run-session))
+           #:run-session
+           #:compute-turn-cost))
 (in-package #:codabrus/session)
 
 

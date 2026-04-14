@@ -7,3 +7,6 @@
 [submodule "libs/cl-mcp"]
 	path = libs/cl-mcp
 	url = https://github.com/cl-ai-project/cl-mcp
+[submodule "libs/completions"]
+	path = libs/completions
+	url = git@github.com:svetlyak40wt/cl-completions.git

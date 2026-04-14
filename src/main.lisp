@@ -20,7 +20,8 @@
                 #:session-response
                 #:session-tokens-in
                 #:session-tokens-out
-                #:session-total-cost-usd)
+                #:session-total-cost-usd
+                #:compute-turn-cost)
   (:import-from #:codabrus/secrets
                 #:read-token)
   (:import-from #:codabrus/vars
@@ -28,6 +29,12 @@
                 #:*headless-mode*
                 #:*allow-execute*
                 #:headless-permission-denied)
+  (:import-from #:completions
+                #:*max-turns*
+                #:*max-cost-usd*
+                #:*cost-fn*
+                #:budget-exceeded
+                #:budget-exceeded-message)
   (:import-from #:log4cl-extras/error
                 #:with-log-unhandled)
   (:export #:main))
@@ -61,6 +68,7 @@
                        (encode-alist alist)))))
 
 
+
 (defmain (main) ((prompt "Run a single task and exit."
                           :short "p")
                  (model "Override the default model for this run."
@@ -72,6 +80,10 @@
                                 :flag t)
                  (output "Output format: plain (default) or json (JSON Lines to stdout). In json mode, logs are written to \"codabrus.log\" by default.")
                  (log-filename "A path to a file where to write logs. If not given, then they will be written to stdout.")
+                 (max-turns "Abort after this many LLM round-trips (default: 20)."
+                            :short nil)
+                 (max-cost-usd "Abort if accumulated cost in USD exceeds this threshold."
+                               :short nil)
                  &rest args)
   "Codabrus — hackable AI code assistant."
 
@@ -96,6 +108,11 @@
               (session (make-session project-dir)))
          (handler-case
              (let* ((*model* (or model *model*))
+                    (*max-turns* (if max-turns (parse-integer max-turns) 20))
+                    (*max-cost-usd* (when max-cost-usd
+                                      (let ((*read-eval* nil))
+                                        (coerce (read-from-string max-cost-usd) 'double-float))))
+                    (*cost-fn* #'compute-turn-cost)
                     (result (let ((completions::*tool-interceptor*
                                     (when json-p
                                       (lambda (fn-name call-args)
@@ -139,6 +156,13 @@
            (headless-permission-denied (c)
              (format *error-output* "Permission denied: ~A~%" c)
              (uiop:quit 2))
+           (budget-exceeded (c)
+             (format *error-output* "~A~%" c)
+             (when json-p
+               (%emit-json-line `((:event . "finish")
+                                  (:status . "budget-exceeded")
+                                  (:message . ,(budget-exceeded-message c)))))
+             (uiop:quit 1))
            (error (e)
              (format *error-output* "Error: ~A~%" e)
              (when json-p

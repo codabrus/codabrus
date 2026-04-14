@@ -5,8 +5,7 @@
   (:import-from #:codabrus/vars
                 #:*project-dir*)
   (:import-from #:serapeum
-                #:fmt
-                #:length<=)
+                #:fmt)
   (:export #:read-file))
 (in-package #:codabrus/tools/read-file)
 
@@ -98,6 +97,6 @@ Reading the entire file is not allowed in most cases. You are only allowed to re
   (let ((response (%read-file target-file
                               start-line-one-indexed-inclusive
                               end-line-one-indexed-inclusive 
-                              should-read-entire-file 
+                              should-read-entire-file
                               explanation)))
     (values response)))

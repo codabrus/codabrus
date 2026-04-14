@@ -74,7 +74,7 @@ This phase is deliberately placed before session persistence and actors — it r
 - `--output plain` (default) — human-readable, same as current REPL output
 - Final cost summary always printed to stderr (not stdout) so it doesn't pollute piped output
 
-### 2.4 Budget Limits
+### 2.4 Budget Limits ✓ (implemented directly in completions library)
 
 - `--max-turns N` — abort after N LLM round-trips (default: 20)
 - `--max-cost-usd F` — abort if accumulated cost exceeds the threshold
