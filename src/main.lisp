@@ -18,10 +18,14 @@
                 #:make-session
                 #:run-session
                 #:session-response
+                #:session-id
                 #:session-tokens-in
                 #:session-tokens-out
                 #:session-total-cost-usd
                 #:compute-turn-cost)
+  (:import-from #:codabrus/session-store
+                #:save-session
+                #:load-session)
   (:import-from #:codabrus/secrets
                 #:read-token)
   (:import-from #:codabrus/vars
@@ -80,6 +84,8 @@
 
 (defmain (main) ((prompt "Run a single task and exit."
                           :short "p")
+                 (session-id "Resume an existing session by its UUID."
+                             :short "s")
                  (model "Override the default model for this run."
                         :short "m")
                  (non-interactive "Activate headless mode: no confirmation prompts. ~
@@ -112,17 +118,20 @@
     (%setup-common)
     
     (cond
-      (prompt
-       ;; CLI mode: run one task and exit
-       (let* ((project-dir (if args
-                             (pathname (first args))
-                             (uiop:getcwd)))
-              (session (make-session project-dir))
-              (audit-stream (when audit-log
-                              (open (pathname audit-log)
-                                    :direction :output
-                                    :if-exists :supersede
-                                    :if-does-not-exist :create))))
+       (prompt
+        ;; CLI mode: run one task and exit
+        (let* ((session (if session-id
+                          (load-session session-id)
+                          (let ((project-dir (if args
+                                               (pathname (first args))
+                                               (uiop:getcwd))))
+                            (make-session project-dir))))
+               (audit-stream (when audit-log
+                               (open (pathname audit-log)
+                                     :direction :output
+                                     :if-exists :supersede
+                                     :if-does-not-exist :create))))
+          (format *error-output* "session: ~A~%" (session-id session))
          (unwind-protect
               (handler-case
                   (let* ((*model* (or model *model*))
@@ -156,8 +165,9 @@
                                                    (when audit-stream
                                                      (%write-audit-line audit-stream result-entry)))
                                                  tool-result))))))
-                                   (run-session session prompt))))
-                    ;; Text output
+                                    (run-session session prompt))))
+                     (save-session result)
+                     ;; Text output
                     (let ((response (session-response result)))
                       (when response
                         (if json-p

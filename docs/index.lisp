@@ -80,9 +80,66 @@ You can install this library from Quicklisp, but you want to receive updates qui
 
 
 (defsection @usage (:title "Usage")
-  "
-TODO: Write a library description. Put some examples here.
-")
+  """
+## One-shot mode
+
+Run a single task and exit:
+
+```
+codabrus --prompt "fix the failing tests" /path/to/project
+```
+
+The agent reads files, searches the codebase, edits files, and runs shell
+commands to complete the task. A session ID is printed to stderr so you can
+continue the conversation later.
+
+## Multi-turn sessions
+
+Each run creates a session (or resumes an existing one). Sessions are stored as
+Markdown files in `~/.cache/codabrus/sessions/<uuid>.md` — you can inspect them
+with any text editor.
+
+### Resume a session
+
+```
+# First run — a new session is created
+codabrus --prompt "add error handling to src/core.lisp" .
+# stderr: session: f47ac10b-58cc-4372-a567-0e02b2c3d479
+
+# Continue in the same session
+codabrus --session-id f47ac10b-58cc-4372-a567-0e02b2c3d479 \
+         --prompt "now run the tests"
+```
+
+### Session files
+
+Each session file has a YAML-like frontmatter with metadata and a Markdown body
+with the full conversation:
+
+```markdown
+---
+id: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+project-dir: "/Users/art/projects/lisp/codabrus"
+model: "deepseek-chat"
+tokens-in: 1234
+tokens-out: 567
+total-cost-usd: 0.003
+created-at: "2026-04-15T10:30:00"
+updated-at: "2026-04-15T10:35:00"
+---
+
+## User
+
+fix the failing tests
+
+## Assistant
+
+I'll look at the test failures and fix them...
+```
+
+Sessions are saved automatically after each run. No data is lost if the process
+crashes — everything written up to the last completed turn is persisted.
+""")
 
 
 (defsection @logging-and-audit (:title "Logging & Audit")
@@ -139,6 +196,20 @@ identified without parsing the entire log:
 ```bash
 jq 'select(.event == "finish")' /tmp/run.jsonl
 # {"event":"finish","status":"budget-exceeded","message":"..."}
+```
+
+## GitHub Actions example
+
+```yaml
+- name: AI code review and fix
+  run: |
+    codabrus \
+      --non-interactive \
+      --allow-execute \
+      --max-turns 30 \
+      --max-cost-usd 0.50 \
+      --audit-log /tmp/codabrus-run.jsonl \
+      --prompt "Run the tests. If any fail, fix them and run again."
 ```
 """)
 

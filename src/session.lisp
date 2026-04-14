@@ -29,15 +29,27 @@
                 #:edit-file)
   (:import-from #:codabrus/tools/bash
                 #:bash)
+  (:import-from #:uuid
+                #:make-v4-uuid)
+  (:import-from #:alexandria
+                #:remove-from-plist)
+  (:import-from #:local-time
+                #:now
+                #:format-timestring)
   (:export #:session
+           #:session-id
            #:session-project-dir
+           #:session-model
            #:session-state
            #:session-tokens-in
            #:session-tokens-out
            #:session-total-cost-usd
+           #:session-created-at
+           #:session-updated-at
            #:session-response
            #:make-session
            #:run-session
+           #:touch-session
            #:compute-turn-cost))
 (in-package #:codabrus/session)
 
@@ -55,8 +67,13 @@
 
 
 (defclass session ()
-  ((project-dir    :initarg :project-dir
+  ((id             :initarg :id
+                   :reader   session-id)
+   (project-dir    :initarg :project-dir
                    :reader   session-project-dir)
+   (model          :initarg  :model
+                   :initform "deepseek-chat"
+                   :reader   session-model)
    (state          :initarg  :state
                    :initform nil
                    :reader   session-state)
@@ -68,23 +85,43 @@
                    :reader   session-tokens-out)
    (total-cost-usd :initarg  :total-cost-usd
                    :initform 0.0d0
-                   :reader   session-total-cost-usd))
+                   :reader   session-total-cost-usd)
+   (created-at     :initarg  :created-at
+                   :reader   session-created-at)
+   (updated-at     :initarg  :updated-at
+                   :reader   session-updated-at))
   (:documentation "Holds message history and project context for a multi-turn conversation.
 Instances are immutable: run-session returns a new session with updated state rather than
 modifying the existing one. This makes sessions safe to share across subagents and to
 branch for parallel exploration."))
 
 
-(defun make-session (project-dir &rest restargs &key state tokens-in tokens-out total-cost-usd)
-  "Create a new session for PROJECT-DIR. STATE, TOKENS-IN, TOKENS-OUT, and TOTAL-COST-USD are optional."
-  (declare (ignore state tokens-in tokens-out total-cost-usd))
-  (apply #'make-instance 'session :project-dir project-dir restargs))
+(defvar +iso-8601-format+
+  '(:year "-" (:month 2) "-" (:day 2) "T" (:hour 2) ":" (:min 2) ":" (:sec 2)))
+
+(defun %format-timestamp (timestamp)
+  (format-timestring nil timestamp :format +iso-8601-format+))
+
+(defun make-session (project-dir &rest restargs
+                     &key id model state tokens-in tokens-out total-cost-usd
+                       created-at updated-at)
+  "Create a new session for PROJECT-DIR."
+  (declare (ignore model state tokens-in tokens-out total-cost-usd))
+  (let ((uuid (or id (format nil "~A" (make-v4-uuid))))
+        (ts (or created-at (%format-timestamp (now)))))
+    (apply #'make-instance 'session
+           :project-dir project-dir
+           :id uuid
+           :created-at ts
+           :updated-at (or updated-at ts)
+           (alexandria:remove-from-plist restargs
+                                         :id :created-at :updated-at))))
 
 
 (defmethod describe-object ((session session) stream)
+  (format stream "Session ~A (project: ~A)~%" (session-id session) (session-project-dir session))
   (let ((messages (when (session-state session)
                     (state-messages (session-state session)))))
-    (format stream "Session (project: ~A)~%" (session-project-dir session))
     (when messages
       (let ((user-msg (find-if (lambda (m) (typep m 'user-message)) messages))
             (ai-msg   (find-if (lambda (m) (typep m 'ai-message))   messages)))
@@ -94,6 +131,19 @@ branch for parallel exploration."))
           (format stream "~%Assistant:~%~A~%" (ai-message-text ai-msg)))))))
 
 
+(defun touch-session (session)
+  "Return a copy of SESSION with updated-at set to now."
+  (make-session (session-project-dir session)
+                :id (session-id session)
+                :model (session-model session)
+                :state (session-state session)
+                :tokens-in (session-tokens-in session)
+                :tokens-out (session-tokens-out session)
+                :total-cost-usd (session-total-cost-usd session)
+                :created-at (session-created-at session)
+                :updated-at (%format-timestamp (now))))
+
+
 (defun run-session (session message)
   "Add MESSAGE to SESSION, run the agent loop, and return the updated session."
   (let* ((*project-dir* (session-project-dir session))
@@ -101,9 +151,10 @@ branch for parallel exploration."))
          (new-state (if current-state
                         (add-message current-state (user-message message))
                         (state (list (user-message message)))))
+         (effective-model (session-model session))
          (agent (ai-agent *system-prompt*
                           :tools '(search-file read-file edit-file bash)
-                          :model *model*))
+                          :model effective-model))
          (final-state (process agent new-state))
          (completer    (agent-completer agent))
          (turn-in      (prompt-token-count completer))
@@ -112,10 +163,14 @@ branch for parallel exploration."))
          (new-total-cost (+ (session-total-cost-usd session) turn-cost)))
     (log:debug "[tokens: ~A in / ~A out | cost: $~,3F]" turn-in turn-out turn-cost)
     (make-session (session-project-dir session)
+                  :id (session-id session)
+                  :model effective-model
                   :state final-state
                   :tokens-in  (+ (session-tokens-in session)  turn-in)
                   :tokens-out (+ (session-tokens-out session) turn-out)
-                  :total-cost-usd new-total-cost)))
+                  :total-cost-usd new-total-cost
+                  :created-at (session-created-at session)
+                  :updated-at (%format-timestamp (now)))))
 
 
 (defun session-response (session)

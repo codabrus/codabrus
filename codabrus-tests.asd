@@ -8,10 +8,11 @@
   :bug-tracker "https://github.org/codabrus/codabrus/issues"
   :pathname "t"
   :depends-on ("log4cl"
-               "codabrus-tests/core"
-               "codabrus-tests/edit-file"
-               "codabrus-tests/bash"
-               "codabrus-tests/integration")
+                "codabrus-tests/core"
+                "codabrus-tests/session-store"
+                "codabrus-tests/edit-file"
+                "codabrus-tests/bash"
+                "codabrus-tests/integration")
   :perform (test-op (op c)
                     (unless (symbol-call :rove :run c)
                       (error "Tests failed"))))

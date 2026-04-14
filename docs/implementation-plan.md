@@ -86,7 +86,7 @@ This phase is deliberately placed before session persistence and actors — it r
 - Suitable for post-run inspection, billing reconciliation, and debugging failed CI runs
 - Written incrementally (flushed after each event) so partial logs survive crashes
 
-### 2.6 GitHub Actions Example
+### 2.6 GitHub Actions Example ✓
 
 ```yaml
 - name: AI code review and fix
@@ -108,11 +108,13 @@ This phase is deliberately placed before session persistence and actors — it r
 
 Goal: sessions survive Lisp image restarts; multiple sessions can coexist.
 
-### 3.1 Session Persistence
-- ADR: choose SQLite (cl-dbi + cl-sqlite) or plain files (each session = a directory of JSONL files)
-- Implement `save-session` / `load-session`
-- Session identified by a UUID
-- Message history serialized as a sequence of JSONL lines (one per part)
+### 3.1 Session Persistence ✓
+- ADR: Markdown files with YAML-like frontmatter in `~/.cache/codabrus/sessions/` (ADR-0007)
+- Session identified by a UUID v4
+- `save-session` / `load-session` / `list-sessions` / `delete-session` in `src/session-store.lisp`
+- Message history serialized as `## User` / `## Assistant` markdown sections
+- CLI: `--session-id <uuid>` flag to resume an existing session
+- Auto-save after each `run-session` call
 
 ### 3.2 Part-Based Message Format
 - Implement the data structures from ADR-0002
