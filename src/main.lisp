@@ -59,13 +59,22 @@
                     or set DEEPSEEK_API_TOKEN env var."))))
 
 
-(defun %emit-json-line (alist)
-  "Encode ALIST as a JSON object and print it as a JSON Line to stdout."
+(defun %encode-json-line (alist)
+  "Encode ALIST as a JSON Lines string."
   (let ((*list-encoder* 'encode-alist)
         (*symbol-key-encoder* (lambda (sym)
                                 (param-case (symbol-name sym)))))
-    (format t "~A~%" (with-output-to-string* ()
-                       (encode-alist alist)))))
+    (with-output-to-string* ()
+      (encode-alist alist))))
+
+(defun %emit-json-line (alist)
+  "Encode ALIST as a JSON object and print it as a JSON Line to stdout."
+  (format t "~A~%" (%encode-json-line alist)))
+
+(defun %write-audit-line (stream alist)
+  "Encode ALIST as a JSON Line and write it to STREAM, flushing immediately."
+  (format stream "~A~%" (%encode-json-line alist))
+  (force-output stream))
 
 
 
@@ -84,6 +93,9 @@
                             :short nil)
                  (max-cost-usd "Abort if accumulated cost in USD exceeds this threshold."
                                :short nil)
+                 (audit-log "Write every tool invocation, result, and cost entry to this JSONL file. ~
+                              Written incrementally so partial logs survive crashes."
+                             :short nil)
                  &rest args)
   "Codabrus — hackable AI code assistant."
 
@@ -105,71 +117,104 @@
        (let* ((project-dir (if args
                              (pathname (first args))
                              (uiop:getcwd)))
-              (session (make-session project-dir)))
-         (handler-case
-             (let* ((*model* (or model *model*))
-                    (*max-turns* (if max-turns (parse-integer max-turns) 20))
-                    (*max-cost-usd* (when max-cost-usd
-                                      (let ((*read-eval* nil))
-                                        (coerce (read-from-string max-cost-usd) 'double-float))))
-                    (*cost-fn* #'compute-turn-cost)
-                    (result (let ((completions::*tool-interceptor*
-                                    (when json-p
-                                      (lambda (fn-name call-args)
-                                        (log:debug "Tool ~A is called" fn-name)
-                                        (%emit-json-line
-                                         `((:event . "tool-call")
-                                           (:tool . ,fn-name)
-                                           (:args . ,call-args)))
-                                        (with-log-unhandled ()
-                                          (let* ((fn-tool (gethash fn-name completions::*tools*))
-                                                 (tool-result
-                                                   (apply (slot-value fn-tool 'completions::fn)
-                                                          (completions::map-args-to-parameters
-                                                           fn-tool call-args))))
-                                            (%emit-json-line
-                                             `((:event . "tool-result")
-                                               (:tool . ,fn-name)
-                                               (:result . ,tool-result)))
-                                            tool-result))))))
-                              (run-session session prompt))))
-               ;; Text output
-               (let ((response (session-response result)))
-                 (when response
-                   (if json-p
-                     (%emit-json-line `((:event . "text") (:content . ,response)))
-                     (format t "~A~%" response))))
-               ;; Cost summary → stderr in all modes
-               (format *error-output*
-                       "[tokens: ~A in / ~A out | cost: $~,3F]~%"
-                       (session-tokens-in result)
-                       (session-tokens-out result)
-                       (session-total-cost-usd result))
-               ;; JSON-only structured events
-               (when json-p
-                 (%emit-json-line `((:event . "cost")
-                                    (:tokens-in  . ,(session-tokens-in result))
-                                    (:tokens-out . ,(session-tokens-out result))
-                                    (:cost-usd   . ,(session-total-cost-usd result))))
-                 (%emit-json-line '((:event . "finish") (:status . "ok"))))
-               (uiop:quit 0))
-           (headless-permission-denied (c)
-             (format *error-output* "Permission denied: ~A~%" c)
-             (uiop:quit 2))
-           (budget-exceeded (c)
-             (format *error-output* "~A~%" c)
-             (when json-p
-               (%emit-json-line `((:event . "finish")
-                                  (:status . "budget-exceeded")
-                                  (:message . ,(budget-exceeded-message c)))))
-             (uiop:quit 1))
-           (error (e)
-             (format *error-output* "Error: ~A~%" e)
-             (when json-p
-               (%emit-json-line `((:event . "finish")
-                                  (:status . "error")
-                                  (:message . ,(format nil "~A" e)))))
-             (uiop:quit 1)))))
+              (session (make-session project-dir))
+              (audit-stream (when audit-log
+                              (open (pathname audit-log)
+                                    :direction :output
+                                    :if-exists :supersede
+                                    :if-does-not-exist :create))))
+         (unwind-protect
+              (handler-case
+                  (let* ((*model* (or model *model*))
+                         (*max-turns* (if max-turns (parse-integer max-turns) 20))
+                         (*max-cost-usd* (when max-cost-usd
+                                           (let ((*read-eval* nil))
+                                             (coerce (read-from-string max-cost-usd) 'double-float))))
+                         (*cost-fn* #'compute-turn-cost)
+                         (result (let ((completions::*tool-interceptor*
+                                         (when (or json-p audit-stream)
+                                           (lambda (fn-name call-args)
+                                             (log:debug "Tool ~A is called" fn-name)
+                                             (let ((call-entry `((:event . "tool-call")
+                                                                  (:tool . ,fn-name)
+                                                                  (:args . ,call-args))))
+                                               (when json-p
+                                                 (%emit-json-line call-entry))
+                                               (when audit-stream
+                                                 (%write-audit-line audit-stream call-entry)))
+                                             (with-log-unhandled ()
+                                               (let* ((fn-tool (gethash fn-name completions::*tools*))
+                                                      (tool-result
+                                                        (apply (slot-value fn-tool 'completions::fn)
+                                                               (completions::map-args-to-parameters
+                                                                fn-tool call-args))))
+                                                 (let ((result-entry `((:event . "tool-result")
+                                                                        (:tool . ,fn-name)
+                                                                        (:result . ,tool-result))))
+                                                   (when json-p
+                                                     (%emit-json-line result-entry))
+                                                   (when audit-stream
+                                                     (%write-audit-line audit-stream result-entry)))
+                                                 tool-result))))))
+                                   (run-session session prompt))))
+                    ;; Text output
+                    (let ((response (session-response result)))
+                      (when response
+                        (if json-p
+                          (%emit-json-line `((:event . "text") (:content . ,response)))
+                          (format t "~A~%" response))))
+                    ;; Cost summary → stderr in all modes
+                    (format *error-output*
+                            "[tokens: ~A in / ~A out | cost: $~,3F]~%"
+                            (session-tokens-in result)
+                            (session-tokens-out result)
+                            (session-total-cost-usd result))
+                    ;; JSON-only structured events
+                    (when json-p
+                      (%emit-json-line `((:event . "cost")
+                                          (:tokens-in  . ,(session-tokens-in result))
+                                          (:tokens-out . ,(session-tokens-out result))
+                                          (:cost-usd   . ,(session-total-cost-usd result))))
+                      (%emit-json-line '((:event . "finish") (:status . "ok"))))
+                    ;; Audit log cost + finish
+                    (when audit-stream
+                      (%write-audit-line audit-stream `((:event . "cost")
+                                                         (:tokens-in  . ,(session-tokens-in result))
+                                                         (:tokens-out . ,(session-tokens-out result))
+                                                         (:cost-usd   . ,(session-total-cost-usd result))))
+                      (%write-audit-line audit-stream '((:event . "finish") (:status . "ok"))))
+                    (uiop:quit 0))
+                (headless-permission-denied (c)
+                  (format *error-output* "Permission denied: ~A~%" c)
+                  (when audit-stream
+                    (%write-audit-line audit-stream `((:event . "finish")
+                                                       (:status . "permission-denied")
+                                                       (:message . ,(format nil "~A" c)))))
+                  (uiop:quit 2))
+                (budget-exceeded (c)
+                  (format *error-output* "~A~%" c)
+                  (when json-p
+                    (%emit-json-line `((:event . "finish")
+                                       (:status . "budget-exceeded")
+                                       (:message . ,(budget-exceeded-message c)))))
+                  (when audit-stream
+                    (%write-audit-line audit-stream `((:event . "finish")
+                                                       (:status . "budget-exceeded")
+                                                       (:message . ,(budget-exceeded-message c)))))
+                  (uiop:quit 1))
+                (error (e)
+                  (format *error-output* "Error: ~A~%" e)
+                  (when json-p
+                    (%emit-json-line `((:event . "finish")
+                                       (:status . "error")
+                                       (:message . ,(format nil "~A" e)))))
+                  (when audit-stream
+                    (%write-audit-line audit-stream `((:event . "finish")
+                                                       (:status . "error")
+                                                       (:message . ,(format nil "~A" e)))))
+                  (uiop:quit 1)))
+           (when audit-stream
+             (close audit-stream)))))
       (t
        ;; Server mode: start Slynk and MCP, then loop
        (40ants-slynk:start-slynk-if-needed)

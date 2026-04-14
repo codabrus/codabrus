@@ -60,6 +60,7 @@
 "
   (@installation section)
   (@usage section)
+  (@logging-and-audit section)
   (@api section))
 
 
@@ -82,6 +83,64 @@ You can install this library from Quicklisp, but you want to receive updates qui
   "
 TODO: Write a library description. Put some examples here.
 ")
+
+
+(defsection @logging-and-audit (:title "Logging & Audit")
+  """
+Codabrus provides two independent mechanisms for capturing structured run data.
+
+## Structured stdout: `--output json`
+
+```
+codabrus --output json --prompt "..."
+```
+
+Switches the process output to [JSON Lines](https://jsonlines.org/) format on stdout.
+Each event is a self-contained JSON object on its own line:
+
+| Event | When emitted |
+|---|---|
+| `tool-call` | Before a tool is executed (includes tool name and arguments) |
+| `tool-result` | After a tool returns (includes the result) |
+| `text` | The final assistant response |
+| `cost` | Token counts and USD cost for the run |
+| `finish` | End of run with status (`ok`, `budget-exceeded`, `error`) |
+
+In this mode, logs are redirected to `codabrus.log` (or `--log-filename`) so that
+structured events are the only thing on stdout. Useful for piping:
+
+```
+codabrus --output json --prompt "..." | jq 'select(.event == "cost")'
+```
+
+## Persistent audit log: `--audit-log`
+
+```
+codabrus --audit-log /tmp/run.jsonl --prompt "..."
+```
+
+Writes the same JSON Lines events to a file without affecting stdout.
+Each line is flushed immediately, so the log survives crashes mid-run.
+Suitable for CI artefacts, billing reconciliation, and post-run debugging.
+
+Can be combined with `--output json` or used with the default plain output:
+
+```
+# Machine-readable stdout AND a persistent audit file
+codabrus --output json --audit-log /var/log/codabrus/run.jsonl --prompt "..."
+
+# Human-readable terminal output AND a persistent audit file
+codabrus --audit-log /tmp/run.jsonl --prompt "..."
+```
+
+The finish event always carries a `status` field, so failed runs can be
+identified without parsing the entire log:
+
+```bash
+jq 'select(.event == "finish")' /tmp/run.jsonl
+# {"event":"finish","status":"budget-exceeded","message":"..."}
+```
+""")
 
 
 (defautodoc @api (:system "codabrus"))

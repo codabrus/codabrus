@@ -80,7 +80,7 @@ This phase is deliberately placed before session persistence and actors — it r
 - `--max-cost-usd F` — abort if accumulated cost exceeds the threshold
 - When a limit is hit: finish cleanly (flush output, write audit log), exit with code `1`
 
-### 2.5 Audit Log
+### 2.5 Audit Log ✓
 
 - `--audit-log path/to/run.jsonl` — write every LLM call, tool invocation, result, and cost entry to a JSONL file
 - Suitable for post-run inspection, billing reconciliation, and debugging failed CI runs
