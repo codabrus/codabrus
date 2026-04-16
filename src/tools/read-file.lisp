@@ -1,6 +1,6 @@
 (uiop:define-package #:codabrus/tools/read-file
   (:use #:cl)
-  (:import-from #:completions
+  (:import-from #:40ants-ai-agents/tool
                 #:defun-tool)
   (:import-from #:codabrus/vars
                 #:*project-dir*)

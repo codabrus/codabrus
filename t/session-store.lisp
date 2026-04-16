@@ -26,12 +26,19 @@
   (:import-from #:40ants-ai-agents/state
                 #:state
                 #:state-messages)
-  (:import-from #:40ants-ai-agents/user-message
-                #:user-message
-                #:user-message-text)
-  (:import-from #:40ants-ai-agents/ai-message
-                #:ai-message
-                #:ai-message-text))
+  (:import-from #:codabrus/message
+                #:message
+                #:message-role
+                #:message-text
+                #:message-parts
+                #:text-part
+                #:tool-call-part
+                #:tool-result-part
+                #:make-user-message
+                #:make-assistant-message
+                #:make-text-part
+                #:make-tool-call-part
+                #:make-tool-result-part))
 (in-package #:codabrus-tests/session-store)
 
 
@@ -80,8 +87,8 @@
   (with-test-session-dir
     (let* ((dir (merge-pathnames "project/" (uiop:temporary-directory)))
            (s1 (make-session dir))
-           (msgs (list (user-message "fix the failing tests")
-                       (ai-message "I will investigate.")))
+           (msgs (list (make-user-message "fix the failing tests")
+                       (make-assistant-message (list (make-text-part "I will investigate.")))))
            (state (state msgs))
            (session (make-session dir
                                   :id (session-id s1)
@@ -96,17 +103,66 @@
         (testing "messages count preserved"
           (ok (= 2 (length loaded-msgs))))
         (testing "user message text preserved"
-          (ok (search "fix the failing tests"
-                      (user-message-text (find-if (lambda (m) (typep m 'user-message)) loaded-msgs)))))
+          (let ((user-msg (find-if (lambda (m) (and (typep m 'message)
+                                                     (eq (message-role m) :user)))
+                                   loaded-msgs)))
+            (ok user-msg)
+            (when user-msg
+              (ok (search "fix the failing tests" (message-text user-msg))))))
         (testing "assistant message text preserved"
-          (ok (search "I will investigate."
-                      (ai-message-text (find-if (lambda (m) (typep m 'ai-message)) loaded-msgs)))))
+          (let ((ai-msg (find-if (lambda (m) (and (typep m 'message)
+                                                   (eq (message-role m) :assistant)))
+                                 loaded-msgs)))
+            (ok ai-msg)
+            (when ai-msg
+              (ok (search "I will investigate." (message-text ai-msg))))))
         (testing "tokens-in preserved"
           (ok (= 500 (session-tokens-in loaded))))
         (testing "tokens-out preserved"
           (ok (= 200 (session-tokens-out loaded))))
         (testing "cost preserved"
           (ok (= 0.003d0 (session-total-cost-usd loaded))))))))
+
+
+(deftest test-session-with-tool-parts-roundtrip ()
+  (with-test-session-dir
+    (let* ((dir (merge-pathnames "project/" (uiop:temporary-directory)))
+           (s1 (make-session dir))
+           (msgs (list (make-user-message "read the file")
+                       (make-assistant-message
+                        (list (make-tool-call-part "read-file" "call_abc" "{\"target_file\":\"foo.lisp\"}")
+                              (make-tool-result-part "call_abc" "file contents here")
+                              (make-text-part "Here is the file.")))))
+           (state (state msgs))
+           (session (make-session dir
+                                  :id (session-id s1)
+                                  :state state
+                                  :created-at (session-created-at s1))))
+      (save-session session)
+      (let* ((loaded (load-session (session-id session)))
+             (loaded-msgs (state-messages (session-state loaded)))
+             (assistant-msg (find-if (lambda (m) (and (typep m 'message)
+                                                       (eq (message-role m) :assistant)))
+                                     loaded-msgs)))
+        (testing "assistant message found"
+          (ok assistant-msg))
+        (when assistant-msg
+          (testing "parts count preserved"
+            (ok (= 3 (length (message-parts assistant-msg)))))
+          (testing "tool-call part preserved"
+            (let ((tc (find-if (lambda (p) (typep p 'tool-call-part)) (message-parts assistant-msg))))
+              (ok tc)
+              (when tc
+                (ok (string= "read-file" (slot-value tc 'codabrus/message::tool-name)))
+                (ok (string= "call_abc" (slot-value tc 'codabrus/message::call-id))))))
+          (testing "tool-result part preserved"
+            (let ((tr (find-if (lambda (p) (typep p 'tool-result-part)) (message-parts assistant-msg))))
+              (ok tr)
+              (when tr
+                (ok (string= "call_abc" (slot-value tr 'codabrus/message::call-id)))
+                (ok (search "file contents" (slot-value tr 'codabrus/message::output))))))
+          (testing "text part preserved"
+            (ok (search "Here is the file." (message-text assistant-msg)))))))))
 
 
 (deftest test-session-file-is-markdown ()
@@ -160,8 +216,8 @@
     (let* ((dir (merge-pathnames "project/" (uiop:temporary-directory)))
            (s1 (make-session dir))
            (multi-text (format nil "line one~%line two~%line three"))
-           (msgs (list (user-message multi-text)
-                       (ai-message "done")))
+           (msgs (list (make-user-message multi-text)
+                       (make-assistant-message (list (make-text-part "done")))))
            (state (state msgs))
            (session (make-session dir
                                   :id (session-id s1)
@@ -170,6 +226,10 @@
       (save-session session)
       (let* ((loaded (load-session (session-id session)))
              (loaded-msgs (state-messages (session-state loaded)))
-             (user-msg (find-if (lambda (m) (typep m 'user-message)) loaded-msgs)))
+             (user-msg (find-if (lambda (m) (and (typep m 'message)
+                                                  (eq (message-role m) :user)))
+                                loaded-msgs)))
         (testing "multiline text preserved"
-          (ok (string= multi-text (user-message-text user-msg))))))))
+          (ok user-msg)
+          (when user-msg
+            (ok (string= multi-text (message-text user-msg)))))))))

@@ -22,7 +22,8 @@
                 #:session-tokens-in
                 #:session-tokens-out
                 #:session-total-cost-usd
-                #:compute-turn-cost)
+                 #:compute-turn-cost
+                 #:with-provider-tool-hooks)
   (:import-from #:codabrus/session-store
                 #:save-session
                 #:load-session)
@@ -33,14 +34,12 @@
                 #:*headless-mode*
                 #:*allow-execute*
                 #:headless-permission-denied)
-  (:import-from #:completions
+  (:import-from #:40ants-ai-agents/llm-provider
                 #:*max-turns*
                 #:*max-cost-usd*
                 #:*cost-fn*
                 #:budget-exceeded
                 #:budget-exceeded-message)
-  (:import-from #:log4cl-extras/error
-                #:with-log-unhandled)
   (:export #:main))
 (in-package #:codabrus/main)
 
@@ -140,32 +139,30 @@
                                            (let ((*read-eval* nil))
                                              (coerce (read-from-string max-cost-usd) 'double-float))))
                          (*cost-fn* #'compute-turn-cost)
-                         (result (let ((completions::*tool-interceptor*
-                                         (when (or json-p audit-stream)
-                                           (lambda (fn-name call-args)
-                                             (log:debug "Tool ~A is called" fn-name)
-                                             (let ((call-entry `((:event . "tool-call")
-                                                                  (:tool . ,fn-name)
-                                                                  (:args . ,call-args))))
-                                               (when json-p
-                                                 (%emit-json-line call-entry))
-                                               (when audit-stream
-                                                 (%write-audit-line audit-stream call-entry)))
-                                             (with-log-unhandled ()
-                                               (let* ((fn-tool (gethash fn-name completions::*tools*))
-                                                      (tool-result
-                                                        (apply (slot-value fn-tool 'completions::fn)
-                                                               (completions::map-args-to-parameters
-                                                                fn-tool call-args))))
-                                                 (let ((result-entry `((:event . "tool-result")
-                                                                        (:tool . ,fn-name)
-                                                                        (:result . ,tool-result))))
-                                                   (when json-p
-                                                     (%emit-json-line result-entry))
-                                                   (when audit-stream
-                                                     (%write-audit-line audit-stream result-entry)))
-                                                 tool-result))))))
-                                    (run-session session prompt))))
+                         (result (run-session session prompt
+                                               :tool-call-hook
+                                               (when (or json-p audit-stream)
+                                                 (lambda (call-id fn-name raw-args)
+                                                   (declare (ignore call-id))
+                                                   (log:debug "Tool ~A is called" fn-name)
+                                                   (let ((call-entry `((:event . "tool-call")
+                                                                       (:tool . ,fn-name)
+                                                                       (:args . ,raw-args))))
+                                                     (when json-p
+                                                       (%emit-json-line call-entry))
+                                                     (when audit-stream
+                                                       (%write-audit-line audit-stream call-entry)))))
+                                               :tool-result-hook
+                                               (when (or json-p audit-stream)
+                                                 (lambda (call-id result)
+                                                   (declare (ignore call-id))
+                                                   (let ((result-entry `((:event . "tool-result")
+                                                                         (:tool . "unknown")
+                                                                         (:result . ,result))))
+                                                     (when json-p
+                                                       (%emit-json-line result-entry))
+                                                     (when audit-stream
+                                                       (%write-audit-line audit-stream result-entry))))))))
                      (save-session result)
                      ;; Text output
                     (let ((response (session-response result)))

@@ -3,15 +3,11 @@
   (:import-from #:40ants-ai-agents/ai-agent
                 #:ai-agent
                 #:agent-completer)
-  (:import-from #:completions
+  (:import-from #:40ants-ai-agents/llm-provider
                 #:prompt-token-count
-                #:completion-token-count)
-  (:import-from #:40ants-ai-agents/user-message
-                #:user-message
-                #:user-message-text)
-  (:import-from #:40ants-ai-agents/ai-message
-                #:ai-message
-                #:ai-message-text)
+                #:completion-token-count
+                #:call-tool)
+  (:import-from #:event-emitter)
   (:import-from #:40ants-ai-agents/state
                 #:state
                 #:state-messages)
@@ -29,6 +25,13 @@
                 #:edit-file)
   (:import-from #:codabrus/tools/bash
                 #:bash)
+  (:import-from #:codabrus/message
+                #:message
+                #:message-role
+                #:message-parts
+                #:message-text
+                #:make-user-message
+                #:make-step-end-part)
   (:import-from #:uuid
                 #:make-v4-uuid)
   (:import-from #:alexandria
@@ -50,14 +53,14 @@
            #:make-session
            #:run-session
            #:touch-session
-           #:compute-turn-cost))
+           #:compute-turn-cost
+           #:with-provider-tool-hooks))
 (in-package #:codabrus/session)
 
 
 (defparameter *system-prompt*
   "You are a code assistant.")
 
-;; DeepSeek-V3 pricing (USD per million tokens); adjust for other models.
 (defparameter *input-cost-per-million-tokens* 0.27d0)
 (defparameter *output-cost-per-million-tokens* 1.10d0)
 
@@ -123,12 +126,11 @@ branch for parallel exploration."))
   (let ((messages (when (session-state session)
                     (state-messages (session-state session)))))
     (when messages
-      (let ((user-msg (find-if (lambda (m) (typep m 'user-message)) messages))
-            (ai-msg   (find-if (lambda (m) (typep m 'ai-message))   messages)))
-        (when user-msg
-          (format stream "~%User:~%~A~%" (user-message-text user-msg)))
-        (when ai-msg
-          (format stream "~%Assistant:~%~A~%" (ai-message-text ai-msg)))))))
+      (loop for msg in messages
+            when (typep msg 'message)
+              do (format stream "~%~A:~%~A~%"
+                         (message-role msg)
+                         (or (message-text msg) "(no text)"))))))
 
 
 (defun touch-session (session)
@@ -144,40 +146,70 @@ branch for parallel exploration."))
                 :updated-at (%format-timestamp (now))))
 
 
-(defun run-session (session message)
+(defmacro with-provider-tool-hooks ((provider on-call on-result) &body body)
+  "Set up :tool-call and :tool-result event listeners on PROVIDER for the duration of BODY."
+  (let ((p (gensym "PROVIDER"))
+        (call-handler (gensym "CALL-HANDLER"))
+        (result-handler (gensym "RESULT-HANDLER")))
+    `(let* ((,p ,provider)
+            (,call-handler ,on-call)
+            (,result-handler ,on-result))
+       (event-emitter:on ,p :tool-call ,call-handler)
+       (event-emitter:on ,p :tool-result ,result-handler)
+       (unwind-protect
+            (progn ,@body)
+         (event-emitter:remove-listener ,p :tool-call ,call-handler)
+         (event-emitter:remove-listener ,p :tool-result ,result-handler)))))
+
+
+(defun run-session (session message &key tool-call-hook tool-result-hook)
   "Add MESSAGE to SESSION, run the agent loop, and return the updated session."
   (let* ((*project-dir* (session-project-dir session))
          (current-state (session-state session))
          (new-state (if current-state
-                        (add-message current-state (user-message message))
-                        (state (list (user-message message)))))
+                        (add-message current-state (make-user-message message))
+                        (state (list (make-user-message message)))))
          (effective-model (session-model session))
          (agent (ai-agent *system-prompt*
                           :tools '(search-file read-file edit-file bash)
                           :model effective-model))
-         (final-state (process agent new-state))
-         (completer    (agent-completer agent))
+         (completer (agent-completer agent))
+         (final-state (if (and tool-call-hook tool-result-hook)
+                          (with-provider-tool-hooks (completer tool-call-hook tool-result-hook)
+                            (process agent new-state))
+                          (process agent new-state)))
          (turn-in      (prompt-token-count completer))
          (turn-out     (completion-token-count completer))
          (turn-cost    (compute-turn-cost turn-in turn-out))
          (new-total-cost (+ (session-total-cost-usd session) turn-cost)))
     (log:debug "[tokens: ~A in / ~A out | cost: $~,3F]" turn-in turn-out turn-cost)
-    (make-session (session-project-dir session)
-                  :id (session-id session)
-                  :model effective-model
-                  :state final-state
-                  :tokens-in  (+ (session-tokens-in session)  turn-in)
-                  :tokens-out (+ (session-tokens-out session) turn-out)
-                  :total-cost-usd new-total-cost
-                  :created-at (session-created-at session)
-                  :updated-at (%format-timestamp (now)))))
+    (let* ((msgs (state-messages final-state))
+           (assistant-msg (first msgs))
+           (enriched-msg (make-instance 'message
+                                        :role :assistant
+                                        :parts (append (message-parts assistant-msg)
+                                                       (list (make-step-end-part
+                                                              :stop turn-in turn-out turn-cost)))
+                                        :created-at (message-created-at assistant-msg)))
+           (enriched-state (state (cons enriched-msg (rest msgs)))))
+      (make-session (session-project-dir session)
+                    :id (session-id session)
+                    :model effective-model
+                    :state enriched-state
+                    :tokens-in  (+ (session-tokens-in session)  turn-in)
+                    :tokens-out (+ (session-tokens-out session) turn-out)
+                    :total-cost-usd new-total-cost
+                    :created-at (session-created-at session)
+                    :updated-at (%format-timestamp (now))))))
 
 
 (defun session-response (session)
   "Return the text of the last AI message in SESSION, or NIL."
-  (let ((messages (when (session-state session)
-                    (state-messages (session-state session)))))
-    (when messages
-      (let ((msg (find-if (lambda (m) (typep m 'ai-message)) messages)))
-        (when msg
-          (ai-message-text msg))))))
+  (when (session-state session)
+    (let ((msgs (state-messages (session-state session))))
+      (let ((assistant-msg (find-if (lambda (m)
+                                      (and (typep m 'message)
+                                           (eq (message-role m) :assistant)))
+                                    msgs)))
+        (when assistant-msg
+          (message-text assistant-msg))))))

@@ -9,6 +9,7 @@
   :pathname "t"
   :depends-on ("log4cl"
                 "codabrus-tests/core"
+                "codabrus-tests/message"
                 "codabrus-tests/session-store"
                 "codabrus-tests/edit-file"
                 "codabrus-tests/bash"

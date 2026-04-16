@@ -15,12 +15,31 @@
   (:import-from #:40ants-ai-agents/state
                 #:state
                 #:state-messages)
-  (:import-from #:40ants-ai-agents/user-message
-                #:user-message
-                #:user-message-text)
-  (:import-from #:40ants-ai-agents/ai-message
-                #:ai-message
-                #:ai-message-text)
+  (:import-from #:codabrus/message
+                #:message
+                #:message-role
+                #:message-parts
+                #:message-text
+                #:text-part
+                #:text-part-content
+                #:tool-call-part
+                #:tool-call-part-tool-name
+                #:tool-call-part-call-id
+                #:tool-call-part-raw-args
+                #:tool-result-part
+                #:tool-result-part-call-id
+                #:tool-result-part-output
+                #:step-end-part
+                #:step-end-part-finish-reason
+                #:step-end-part-tokens-in
+                #:step-end-part-tokens-out
+                #:step-end-part-cost-usd
+                #:make-text-part
+                #:make-tool-call-part
+                #:make-tool-result-part
+                #:make-step-end-part
+                #:make-user-message
+                #:make-assistant-message)
   (:import-from #:log)
   (:export #:*sessions-dir*
            #:save-session
@@ -70,23 +89,39 @@
     (format s "---~%")))
 
 
+(defun %serialize-part (part s)
+  (typecase part
+    (text-part
+     (write-string (text-part-content part) s))
+    (tool-call-part
+     (format s "### Tool Call: ~A (~A)~%~%```json~%~A~%```~%"
+             (tool-call-part-tool-name part)
+             (tool-call-part-call-id part)
+             (tool-call-part-raw-args part)))
+    (tool-result-part
+     (format s "### Tool Result (~A)~%~%~A~%"
+             (tool-result-part-call-id part)
+             (tool-result-part-output part)))
+    (step-end-part
+     (format s "### Step End~%~A tokens: ~A in / ~A out | cost: $~,3F~%"
+             (step-end-part-finish-reason part)
+             (step-end-part-tokens-in part)
+             (step-end-part-tokens-out part)
+             (step-end-part-cost-usd part)))))
+
+
 (defun %serialize-body (session)
-  "Serialize session messages as markdown sections."
+  "Serialize session messages as markdown sections with parts."
   (let ((messages (when (session-state session)
                     (state-messages (session-state session)))))
     (if messages
         (with-output-to-string (s)
           (loop
             for msg in (reverse messages)
-            for role = (cond ((typep msg 'user-message) "User")
-                             ((typep msg 'ai-message) "Assistant")
-                             (t nil))
-            when role
-              do (format s "~%~%## ~A~%~%" role)
-                 (let ((text (if (typep msg 'user-message)
-                                 (user-message-text msg)
-                                 (ai-message-text msg))))
-                   (write-string text s)
+            when (typep msg 'message)
+              do (format s "~%~%## ~(~A~)~%~%" (message-role msg))
+                 (dolist (part (message-parts msg))
+                   (%serialize-part part s)
                    (terpri s))))
         "")))
 
@@ -129,23 +164,73 @@ Expects LINES to start with '---', end at the next '---'."
   (length lines))
 
 
+(defun %parse-tool-call-header (line)
+  "Parse '### Tool Call: tool-name (call-id)' from LINE.
+Returns (values tool-name call-id) or NIL."
+  (let ((prefix "### Tool Call: "))
+    (when (and (>= (length line) (length prefix))
+               (string= (subseq line 0 (length prefix)) prefix))
+      (let* ((rest (subseq line (length prefix)))
+             (open-paren (position #\( rest :from-end t))
+             (close-paren (position #\) rest :from-end t)))
+        (when (and open-paren close-paren)
+          (values (string-trim " " (subseq rest 0 open-paren))
+                  (string-trim " " (subseq rest (1+ open-paren) close-paren))))))))
+
+(defun %parse-tool-result-header (line)
+  "Parse '### Tool Result (call-id)' from LINE.
+Returns call-id or NIL."
+  (let ((prefix "### Tool Result"))
+    (when (and (>= (length line) (length prefix))
+               (string= (subseq line 0 (length prefix)) prefix))
+      (let ((open-paren (position #\( line))
+            (close-paren (position #\) line :from-end t)))
+        (when (and open-paren close-paren)
+          (string-trim " " (subseq line (1+ open-paren) close-paren)))))))
+
+
 (defun %parse-body-messages (lines)
-  "Parse ## User and ## Assistant sections from LINES.
+  "Parse ## User / ## Assistant sections with parts from LINES.
 Returns a list of message instances in chronological order."
   (let ((body-lines (nthcdr (%find-body-start lines) lines))
         (messages nil)
         (current-role nil)
-        (current-text-lines nil))
-    (flet ((flush-section ()
-             (when (and current-role current-text-lines)
+        (current-parts nil)
+        (current-text-lines nil)
+        (pending-tool-call-name nil)
+        (pending-tool-call-id nil)
+        (pending-tool-call-args nil))
+    (flet ((flush-text ()
+             (when current-text-lines
                (let ((text (string-trim '(#\Newline #\Space #\Tab)
                                         (format nil "~{~A~%~}" (nreverse current-text-lines)))))
-                 (cond
-                   ((string= current-role "User")
-                    (push (user-message text) messages))
-                   ((string= current-role "Assistant")
-                    (push (ai-message text) messages))))
-               (setf current-text-lines nil))))
+                 (unless (string= text "")
+                   (push (make-text-part text) current-parts)))
+               (setf current-text-lines nil)))
+           (flush-pending-tool-call ()
+             (when pending-tool-call-name
+               (push (make-tool-call-part pending-tool-call-name
+                                          pending-tool-call-id
+                                          (or pending-tool-call-args "{}"))
+                     current-parts)
+               (setf pending-tool-call-name nil
+                     pending-tool-call-id nil
+                     pending-tool-call-args nil)))
+           (flush-section ()
+             (flush-pending-tool-call)
+             (flush-text)
+             (when (and current-role current-parts)
+               (let ((role-key (cond ((string-equal current-role "User") :user)
+                                     ((string-equal current-role "Assistant") :assistant)
+                                     ((string-equal current-role "System") :system))))
+                 (when role-key
+                   (push (make-instance 'message
+                                        :role role-key
+                                        :parts (nreverse current-parts)
+                                        :created-at "")
+                         messages))))
+             (setf current-parts nil
+                   current-text-lines nil)))
       (dolist (line body-lines)
         (let ((stripped (string-trim " " line)))
           (cond
@@ -153,6 +238,43 @@ Returns a list of message instances in chronological order."
                   (string= (subseq stripped 0 3) "## "))
              (flush-section)
              (setf current-role (string-trim " " (subseq stripped 3))))
+            ((and (>= (length stripped) 15)
+                  (string= (subseq stripped 0 15) "### Tool Call: "))
+             (flush-text)
+             (flush-pending-tool-call)
+             (multiple-value-bind (name call-id)
+                 (%parse-tool-call-header stripped)
+               (setf pending-tool-call-name name
+                     pending-tool-call-id call-id
+                     pending-tool-call-args nil)))
+            ((and (>= (length stripped) 16)
+                  (string= (subseq stripped 0 16) "### Tool Result "))
+             (flush-text)
+             (flush-pending-tool-call)
+             (let ((call-id (%parse-tool-result-header stripped)))
+               (setf current-text-lines nil)
+               (let ((text-start (position #\Newline stripped :start 16)))
+                 (when text-start
+                   (push (make-tool-result-part call-id
+                                                (string-trim '(#\Newline #\Space #\Tab)
+                                                             (subseq stripped text-start)))
+                         current-parts)))))
+            ((and pending-tool-call-name
+                  (string= stripped "```json"))
+             nil)
+            ((and pending-tool-call-name
+                  (string= stripped "```"))
+             (flush-pending-tool-call))
+            ((and pending-tool-call-name
+                  current-text-lines)
+             (setf pending-tool-call-args
+                   (if pending-tool-call-args
+                       (concatenate 'string pending-tool-call-args #\Newline stripped)
+                       stripped)))
+            ((and (>= (length stripped) 11)
+                  (string= (subseq stripped 0 11) "### Step End"))
+             (flush-text)
+             (flush-pending-tool-call))
             (t
              (when current-role
                (push line current-text-lines))))))
