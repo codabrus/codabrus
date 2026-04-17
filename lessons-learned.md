@@ -147,3 +147,82 @@
 ```
 
 Вызывать через MCP-инструмент `mcp__lisp-dev-mcp__eval_lisp_form`.
+
+## Правила изменения локальных библиотек
+
+### libs/ai-agents (40ants-ai-agents)
+
+Локальная fork — **можно менять без сохранения обратной совместимости**. Это наша библиотека, используемая только codabrus. Каждое значимое изменение кратко описывать в `libs/ai-agents/docs/changelog.lisp`.
+
+### libs/completions
+
+**Сторонняя библиотека** (оригинал — Anthony Green). Менять только после явного подтверждения от Art. Все изменения проектировать так, чтобы их можно было отправить в upstream:
+- Минимальные, целенаправленные патчи
+- Без breaking changes в существующем API
+- Новые фичи добавлять через необязательные переменные/параметры (как `*tool-events*`)
+
+## Как избежать проблем со скобками в Lisp
+
+При написании новых `.lisp`-файлов (особенно длинных, 100+ строк) часто возникают ошибки несогласованных скобок. Паттерны ошибок и решения:
+
+### 1. Не писать большие файлы целиком
+
+Разбивать большие функции на вспомогательные (helper) функции. В этой сессии `openai-completions-loop` (одна функция на 100 строк с 10 уровнями вложенности) была источником большинства ошибок. После разбиения на `openai-streaming-loop`, `openai-non-streaming-loop`, `exec-tool-calls`, `build-payload` каждая функция стала короче и проще.
+
+### 2. Проверять скобки перед компиляцией
+
+Использовать скрипт проверки глубины скобок **до** `asdf:load-system`:
+
+```lisp
+(let* ((content (uiop:read-file-string "path/to/file.lisp"))
+       (lines (cl-ppcre:split "\\n" content))
+       (depth 0))
+  (loop for line in lines
+        for i from 1
+        for d = (let ((dd 0) (in-str nil) (in-com nil))
+                  (loop for ch across line
+                        do (cond (in-com)
+                                 (in-str (when (char= ch #\") (setf in-str nil)))
+                                 ((char= ch #\;) (setf in-com t))
+                                 ((char= ch #\") (setf in-str t))
+                                 ((char= ch #\() (incf dd) (incf depth))
+                                 ((char= ch #\)) (decf dd) (decf depth))))
+                  dd)
+        when (< depth 0)
+          do (format t "*** NEGATIVE at line ~A~%" i))
+  (format t "Final depth: ~A~%" depth))
+```
+
+Если `Final depth` ≠ 0 — файл содержит ошибку. ЕслиNegative depth — лишняя `)` на указанной строке.
+
+### 3. Осторожнее с `))))` — считать уровни
+
+Самая частая ошибка: закрывающих скобок на 1 больше или меньше нужного. Правило: перед `))))` проговорить вслух что именно закрывается. Пример опасного места:
+
+```lisp
+;; 7 уровней закрывающих — легко ошибиться:
+                                                    args)))))))
+;; Лучше — вынести во вспомогательную переменную/функцию
+```
+
+### 4. JSON внутри ai-agents — использовать utils.lisp
+
+Внутри `libs/ai-agents/` **всегда** использовать `40ants-ai-agents/utils:json-encode` и `40ants-ai-agents/utils:json-parse` вместо прямых вызовов YASON или локальных `%json-encode`/`%json-parse`.
+
+**Не использовать alists для JSON-данных.** Все JSON-объекты — hash-tables со строковыми ключами. Создавать через `serapeum:dict`, не `make-hash-table`. Никаких `:object-as :alist`, `*list-encoder*`, `*symbol-key-encoder*`, `*symbol-encoder*` — это всё лишнее.
+
+```lisp
+;; ПРАВИЛЬНО:
+(serapeum:dict "a" 1 "b" (serapeum:dict "nested" 42))
+;; => #<HASH-TABLE "a" → 1, "b" → {"nested" → 42}>
+
+;; НЕПРАВИЛЬНО:
+(make-hash-table :test 'equal)
+(setf (gethash "a" ht) 1)
+;; НЕПРАВИЛЬНО:
+'((:a . 1) (:b . 2))  ;; alists для JSON-данных
+```
+
+Флаги YASON, которые нужны: `:json-arrays-as-vectors t`, `:json-booleans-as-symbols t`, `:json-nulls-as-keyword t`. Без последнего и `nil`, и `[]` превращаются в пустой JSON-массив.
+
+Провайдеры (`openai.lisp`, будущие `anthropic.lisp` и т.д.) должны `:import-from #:40ants-ai-agents/utils #:json-encode #:json-parse`. Сейчас в `openai.lisp` и `llm-provider.lisp` ещё остались локальные `%json-encode`/`%json-parse` — их нужно заменить на импорт из utils.
