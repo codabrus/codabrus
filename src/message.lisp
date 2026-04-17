@@ -9,13 +9,14 @@
   (:import-from #:serapeum
                 #:dict)
   (:export #:message
-           #:message-role
-           #:message-parts
-           #:message-created-at
-           #:message-text
+            #:message-id
+            #:message-role
+            #:message-parts
+            #:message-created-at
+            #:message-text
            #:text-part #:text-part-content
            #:tool-call-part #:tool-call-part-tool-name #:tool-call-part-call-id #:tool-call-part-raw-args
-           #:tool-result-part #:tool-result-part-call-id #:tool-result-part-output
+            #:tool-result-part #:tool-result-part-call-id #:tool-result-part-output #:tool-result-part-metadata
            #:step-end-part #:step-end-part-finish-reason #:step-end-part-tokens-in
            #:step-end-part-tokens-out #:step-end-part-cost-usd
            #:reasoning-part #:reasoning-part-content
@@ -45,7 +46,8 @@
 
 (defclass tool-result-part ()
   ((call-id :initarg :call-id :type string :reader tool-result-part-call-id)
-   (output :initarg :output :type string :reader tool-result-part-output)))
+   (output :initarg :output :type string :reader tool-result-part-output)
+   (metadata :initarg :metadata :type list :initform nil :reader tool-result-part-metadata)))
 
 (defclass step-end-part ()
   ((finish-reason :initarg :finish-reason :type keyword :reader step-end-part-finish-reason)
@@ -74,8 +76,8 @@
 (defun make-tool-call-part (tool-name call-id raw-args)
   (make-instance 'tool-call-part :tool-name tool-name :call-id call-id :raw-args raw-args))
 
-(defun make-tool-result-part (call-id output)
-  (make-instance 'tool-result-part :call-id call-id :output output))
+(defun make-tool-result-part (call-id output &optional metadata)
+  (make-instance 'tool-result-part :call-id call-id :output output :metadata metadata))
 
 (defun make-step-end-part (finish-reason tokens-in tokens-out cost-usd)
   (make-instance 'step-end-part
@@ -106,7 +108,11 @@
 ;;; Message class
 
 (defclass message (40ants-ai-agents/message:message)
-  ((role :initarg :role
+  ((id :initarg :id
+       :type (or null integer)
+       :initform nil
+       :reader message-id)
+   (role :initarg :role
          :type (member :user :assistant :system)
          :reader message-role)
    (parts :initarg :parts

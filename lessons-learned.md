@@ -237,3 +237,61 @@
 ```
 
 Провайдеры (`openai.lisp`, будущие `anthropic.lisp` и т.д.) должны `:import-from #:40ants-ai-agents/utils #:json-encode #:json-parse`. Сейчас в `openai.lisp` и `llm-provider.lisp` ещё остались локальные `%json-encode`/`%json-parse` — их нужно заменить на импорт из utils.
+
+## event-emitter: порядок аргументов в `on`
+
+Библиотека `event-emitter` имеет непоследовательный порядок аргументов:
+- `on` и `emit`: `(event object ...)` — **событие первым**
+- `remove-listener`, `add-listener`, `listeners`: `(object event ...)` — **объект первым**
+
+```lisp
+;; ПРАВИЛЬНО:
+(event-emitter:on :tool-call provider handler)
+(event-emitter:emit :tool-call provider call-id tool-name args)
+(event-emitter:remove-listener provider :tool-call handler)
+
+;; НЕПРАВИЛЬНО (объект первым в on):
+(event-emitter:on provider :tool-call handler)
+```
+
+Ошибка при неправильном порядке — `NO-APPLICABLE-METHOD-ERROR` на `SILO`, т.к. `on` попытается вызвать `silo` на ключевом слове вместо объекта.
+
+## flet vs labels для взаимных ссылок
+
+`flet` не позволяет локальным функциям ссылаться друг на друга. Если `flush-section` вызывает `flush-pending-tool-call`, используйте `labels`:
+
+```lisp
+;; ПРАВИЛЬНО:
+(labels ((flush-text () ...)
+         (flush-section () (flush-text))) ; OK
+  ...)
+
+;; НЕПРАВИЛЬНО:
+(flet ((flush-text () ...)
+       (flush-section () (flush-text))) ; UNDEFINED-FUNCTION
+  ...)
+```
+
+## CLOS: позднее связывание методов
+
+Метод `make-response-message` определён и в базовой библиотеке (`40ants-ai-agents/ai-agent`), и в `codabrus/message`. Оба имеют одинаковые специализаторы `(response tool-events)`. CLOS загружает оба метода, но при вызове используется последний загруженный. Поэтому `(make-response-message response nil)` в `process` вызывает метод из codabrus, возвращая `codabrus/message:message` вместо `text-response`.
+
+## serapeum:dict возвращает hash-table, не alist
+
+`serapeum:dict` создаёт hash-table. Тесты, которые используют `assoc`/`cdr` для доступа к результатам `to-api-messages`, сломаны — нужно использовать `gethash`:
+
+```lisp
+;; ПРАВИЛЬНО:
+(gethash "role" entry)
+
+;; НЕПРАВИЛЬНО:
+(cdr (assoc :role entry))
+```
+
+## JSON null представление
+
+`serapeum:dict` с `:null` значением создаёт `(gethash "content" entry)` → `:NULL` (keyword). Проверка `(null ...)` возвращает NIL для `:NULL`. Правильная проверка:
+
+```lisp
+(eq :null (gethash "content" entry))
+```

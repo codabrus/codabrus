@@ -1,18 +1,19 @@
 (uiop:define-package #:codabrus-tests/integration
   (:use #:cl)
   (:import-from #:rove
-                #:deftest
-                #:ok
-                #:testing)
+                 #:deftest
+                 #:ok
+                 #:testing)
   (:import-from #:codabrus/session
-                #:make-session
-                #:run-session
-                #:session-state)
+                 #:make-session
+                 #:run-session
+                 #:session-state)
   (:import-from #:40ants-ai-agents/state
-                #:state-messages)
-  (:import-from #:40ants-ai-agents/ai-message
-                #:ai-message
-                #:ai-message-text))
+                 #:state-messages)
+  (:import-from #:codabrus/message
+                 #:message
+                 #:message-role
+                 #:message-text))
 (in-package #:codabrus-tests/integration)
 
 
@@ -38,9 +39,12 @@
              (testing "session has state after run"
                (ok (session-state result)))
              (let* ((msgs    (state-messages (session-state result)))
-                    (ai-msg  (find-if (lambda (m) (typep m 'ai-message)) msgs)))
+                    (ai-msg  (find-if (lambda (m)
+                                        (and (typep m 'message)
+                                             (eq (message-role m) :assistant)))
+                                      msgs)))
                (testing "AI responded"
                  (ok ai-msg))
                (testing "response mentions the known file contents"
-                 (ok (search "xyzzy-marker-42" (ai-message-text ai-msg))))))
+                 (ok (search "xyzzy-marker-42" (message-text ai-msg))))))
         (uiop:delete-directory-tree tmpdir :validate t :if-does-not-exist :ignore)))))

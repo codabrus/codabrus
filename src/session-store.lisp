@@ -99,9 +99,9 @@
              (tool-call-part-call-id part)
              (tool-call-part-raw-args part)))
     (tool-result-part
-     (format s "### Tool Result (~A)~%~%~A~%"
-             (tool-result-part-call-id part)
-             (tool-result-part-output part)))
+      (format s "### Tool Result (~A)~%~%```~%~A~%```~%"
+              (tool-result-part-call-id part)
+              (tool-result-part-output part)))
     (step-end-part
      (format s "### Step End~%~A tokens: ~A in / ~A out | cost: $~,3F~%"
              (step-end-part-finish-reason part)
@@ -199,8 +199,11 @@ Returns a list of message instances in chronological order."
         (current-text-lines nil)
         (pending-tool-call-name nil)
         (pending-tool-call-id nil)
-        (pending-tool-call-args nil))
-    (flet ((flush-text ()
+        (pending-tool-call-args nil)
+        (pending-tool-result-call-id nil)
+        (pending-tool-result-lines nil)
+        (pending-tool-result-in-block nil))
+    (labels ((flush-text ()
              (when current-text-lines
                (let ((text (string-trim '(#\Newline #\Space #\Tab)
                                         (format nil "~{~A~%~}" (nreverse current-text-lines)))))
@@ -216,7 +219,18 @@ Returns a list of message instances in chronological order."
                (setf pending-tool-call-name nil
                      pending-tool-call-id nil
                      pending-tool-call-args nil)))
+           (flush-pending-tool-result ()
+             (when pending-tool-result-call-id
+               (let ((text (string-trim '(#\Newline #\Space #\Tab)
+                                        (format nil "~{~A~%~}"
+                                                (nreverse pending-tool-result-lines)))))
+                 (push (make-tool-result-part pending-tool-result-call-id
+                                              (if (string= text "") "(no output)" text))
+                       current-parts))
+               (setf pending-tool-result-call-id nil
+                     pending-tool-result-lines nil)))
            (flush-section ()
+             (flush-pending-tool-result)
              (flush-pending-tool-call)
              (flush-text)
              (when (and current-role current-parts)
@@ -240,6 +254,7 @@ Returns a list of message instances in chronological order."
              (setf current-role (string-trim " " (subseq stripped 3))))
             ((and (>= (length stripped) 15)
                   (string= (subseq stripped 0 15) "### Tool Call: "))
+             (flush-pending-tool-result)
              (flush-text)
              (flush-pending-tool-call)
              (multiple-value-bind (name call-id)
@@ -249,32 +264,40 @@ Returns a list of message instances in chronological order."
                      pending-tool-call-args nil)))
             ((and (>= (length stripped) 16)
                   (string= (subseq stripped 0 16) "### Tool Result "))
+             (flush-pending-tool-result)
              (flush-text)
              (flush-pending-tool-call)
              (let ((call-id (%parse-tool-result-header stripped)))
-               (setf current-text-lines nil)
-               (let ((text-start (position #\Newline stripped :start 16)))
-                 (when text-start
-                   (push (make-tool-result-part call-id
-                                                (string-trim '(#\Newline #\Space #\Tab)
-                                                             (subseq stripped text-start)))
-                         current-parts)))))
+               (setf pending-tool-result-call-id call-id
+                     pending-tool-result-lines nil
+                     pending-tool-result-in-block nil)))
             ((and pending-tool-call-name
                   (string= stripped "```json"))
              nil)
             ((and pending-tool-call-name
                   (string= stripped "```"))
              (flush-pending-tool-call))
+            ((and pending-tool-result-call-id
+                  (not pending-tool-result-in-block)
+                  (string= stripped "```"))
+             (setf pending-tool-result-in-block t))
+            ((and pending-tool-result-call-id
+                  pending-tool-result-in-block
+                  (string= stripped "```"))
+             (flush-pending-tool-result))
             ((and pending-tool-call-name
                   current-text-lines)
              (setf pending-tool-call-args
                    (if pending-tool-call-args
-                       (concatenate 'string pending-tool-call-args #\Newline stripped)
+                        (concatenate 'string pending-tool-call-args (string #\Newline) stripped)
                        stripped)))
             ((and (>= (length stripped) 11)
                   (string= (subseq stripped 0 11) "### Step End"))
+             (flush-pending-tool-result)
              (flush-text)
              (flush-pending-tool-call))
+            (pending-tool-result-call-id
+             (push line pending-tool-result-lines))
             (t
              (when current-role
                (push line current-text-lines))))))

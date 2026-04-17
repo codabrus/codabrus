@@ -116,7 +116,7 @@ Goal: sessions survive Lisp image restarts; multiple sessions can coexist.
 - CLI: `--session-id <uuid>` flag to resume an existing session
 - Auto-save after each `run-session` call
 
-### 3.2 Part-Based Message Format
+### 3.2 Part-Based Message Format ✓
 - Implement the data structures from ADR-0002
 - Adapter layer: convert part-based history to the list format `40ants-ai-agents` expects
 - All existing tools return their output wrapped in `tool-result-part`

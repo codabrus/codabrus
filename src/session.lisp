@@ -1,45 +1,47 @@
 (uiop:define-package #:codabrus/session
   (:use #:cl)
   (:import-from #:40ants-ai-agents/ai-agent
-                #:ai-agent
-                #:agent-completer)
+                 #:ai-agent
+                 #:agent-completer
+                 #:make-response-message)
   (:import-from #:40ants-ai-agents/llm-provider
-                #:prompt-token-count
-                #:completion-token-count
-                #:call-tool)
+                 #:prompt-token-count
+                 #:completion-token-count
+                 #:call-tool
+                 #:json-encode)
   (:import-from #:event-emitter)
   (:import-from #:40ants-ai-agents/state
-                #:state
-                #:state-messages)
+                 #:state
+                 #:state-messages)
   (:import-from #:40ants-ai-agents/generics
-                #:add-message
-                #:process)
+                 #:add-message
+                 #:process)
   (:import-from #:codabrus/vars
-                #:*project-dir*
-                #:*model*)
+                 #:*project-dir*
+                 #:*model*)
   (:import-from #:codabrus/tools/search
-                #:search-file)
+                 #:search-file)
   (:import-from #:codabrus/tools/read-file
-                #:read-file)
+                 #:read-file)
   (:import-from #:codabrus/tools/edit-file
-                #:edit-file)
+                 #:edit-file)
   (:import-from #:codabrus/tools/bash
-                #:bash)
+                 #:bash)
   (:import-from #:codabrus/message
-                #:message
-                #:message-role
-                #:message-parts
-                #:message-text
-                #:message-created-at
-                #:make-user-message
-                #:make-step-end-part)
+                 #:message
+                 #:message-role
+                 #:message-parts
+                 #:message-text
+                 #:message-created-at
+                 #:make-user-message
+                 #:make-step-end-part)
   (:import-from #:uuid
-                #:make-v4-uuid)
+                 #:make-v4-uuid)
   (:import-from #:alexandria
-                #:remove-from-plist)
+                 #:remove-from-plist)
   (:import-from #:local-time
-                #:now
-                #:format-timestring)
+                 #:now
+                 #:format-timestring)
   (:export #:session
            #:session-id
            #:session-project-dir
@@ -155,8 +157,8 @@ branch for parallel exploration."))
     `(let* ((,p ,provider)
             (,call-handler ,on-call)
             (,result-handler ,on-result))
-       (event-emitter:on ,p :tool-call ,call-handler)
-       (event-emitter:on ,p :tool-result ,result-handler)
+       (event-emitter:on :tool-call ,p ,call-handler)
+       (event-emitter:on :tool-result ,p ,result-handler)
        (unwind-protect
             (progn ,@body)
          (event-emitter:remove-listener ,p :tool-call ,call-handler)
@@ -164,7 +166,9 @@ branch for parallel exploration."))
 
 
 (defun run-session (session message &key tool-call-hook tool-result-hook)
-  "Add MESSAGE to SESSION, run the agent loop, and return the updated session."
+  "Add MESSAGE to SESSION, run the agent loop, and return the updated session.
+Tool events are always captured into part-based message history. Optional
+TOOL-CALL-HOOK and TOOL-RESULT-HOOK are called for display/logging purposes."
   (let* ((*project-dir* (session-project-dir session))
          (current-state (session-state session))
          (new-state (if current-state
@@ -175,10 +179,22 @@ branch for parallel exploration."))
                           :tools '(search-file read-file edit-file bash)
                           :model effective-model))
          (completer (agent-completer agent))
-         (final-state (if (and tool-call-hook tool-result-hook)
-                          (with-provider-tool-hooks (completer tool-call-hook tool-result-hook)
-                            (process agent new-state))
-                          (process agent new-state)))
+         (collected-events '())
+         (internal-call-hook
+           (lambda (call-id fn-name args)
+             (push (list :tool-call call-id fn-name (json-encode args))
+                   collected-events)
+             (when tool-call-hook
+               (funcall tool-call-hook call-id fn-name args))))
+         (internal-result-hook
+           (lambda (call-id result)
+             (push (list :tool-result call-id result)
+                   collected-events)
+             (when tool-result-hook
+               (funcall tool-result-hook call-id result))))
+         (final-state
+           (with-provider-tool-hooks (completer internal-call-hook internal-result-hook)
+             (process agent new-state)))
          (turn-in      (prompt-token-count completer))
          (turn-out     (completion-token-count completer))
          (turn-cost    (compute-turn-cost turn-in turn-out))
@@ -186,12 +202,17 @@ branch for parallel exploration."))
     (log:debug "[tokens: ~A in / ~A out | cost: $~,3F]" turn-in turn-out turn-cost)
     (let* ((msgs (state-messages final-state))
            (assistant-msg (first msgs))
+           (rebuilt-msg
+             (if collected-events
+                 (make-response-message (message-text assistant-msg)
+                                        (nreverse collected-events))
+                 assistant-msg))
            (enriched-msg (make-instance 'message
                                         :role :assistant
-                                        :parts (append (message-parts assistant-msg)
+                                        :parts (append (message-parts rebuilt-msg)
                                                        (list (make-step-end-part
                                                               :stop turn-in turn-out turn-cost)))
-                                        :created-at (message-created-at assistant-msg)))
+                                        :created-at (message-created-at rebuilt-msg)))
            (enriched-state (state (cons enriched-msg (rest msgs)))))
       (make-session (session-project-dir session)
                     :id (session-id session)

@@ -1,6 +1,6 @@
 # ADR-0002: Part-Based Message Format
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-04-08
 
 ## Context

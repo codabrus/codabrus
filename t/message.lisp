@@ -1,36 +1,38 @@
 (uiop:define-package #:codabrus-tests/message
   (:use #:cl)
   (:import-from #:rove
-                #:deftest
-                #:ok
-                #:testing)
+                 #:deftest
+                 #:ok
+                 #:testing)
   (:import-from #:codabrus/message
-                #:message
-                #:message-role
-                #:message-parts
-                #:message-text
-                #:text-part
-                #:text-part-content
-                #:tool-call-part
-                #:tool-call-part-tool-name
-                #:tool-call-part-call-id
-                #:tool-call-part-raw-args
-                #:tool-result-part
-                #:tool-result-part-call-id
-                #:tool-result-part-output
-                #:step-end-part
-                #:step-end-part-finish-reason
-                #:step-end-part-tokens-in
-                #:step-end-part-tokens-out
-                #:step-end-part-cost-usd
-                #:make-text-part
-                #:make-tool-call-part
-                #:make-tool-result-part
-                #:make-step-end-part
-                #:make-user-message
-                #:make-assistant-message)
+                 #:message
+                 #:message-role
+                 #:message-parts
+                 #:message-text
+                 #:text-part
+                 #:text-part-content
+                 #:tool-call-part
+                 #:tool-call-part-tool-name
+                 #:tool-call-part-call-id
+                 #:tool-call-part-raw-args
+                 #:tool-result-part
+                 #:tool-result-part-call-id
+                 #:tool-result-part-output
+                 #:tool-result-part-metadata
+                 #:step-end-part
+                 #:step-end-part-finish-reason
+                 #:step-end-part-tokens-in
+                 #:step-end-part-tokens-out
+                 #:step-end-part-cost-usd
+                 #:make-text-part
+                 #:make-tool-call-part
+                 #:make-tool-result-part
+                 #:make-step-end-part
+                 #:make-user-message
+                 #:make-assistant-message)
   (:import-from #:40ants-ai-agents/ai-agent
-                #:to-api-messages))
+                 #:to-api-messages
+                 #:make-response-message))
 (in-package #:codabrus-tests/message)
 
 
@@ -81,8 +83,8 @@
          (api (to-api-messages msg)))
     (ok (= 1 (length api)))
     (let ((entry (first api)))
-      (ok (string= "user" (cdr (assoc :role entry))))
-      (ok (string= "hello" (cdr (assoc :content entry)))))))
+      (ok (string= "user" (gethash "role" entry)))
+      (ok (string= "hello" (gethash "content" entry))))))
 
 
 (deftest test-to-api-messages-assistant-text-only ()
@@ -90,8 +92,8 @@
          (api (to-api-messages msg)))
     (ok (= 1 (length api)))
     (let ((entry (first api)))
-      (ok (string= "assistant" (cdr (assoc :role entry))))
-      (ok (string= "response text" (cdr (assoc :content entry)))))))
+      (ok (string= "assistant" (gethash "role" entry)))
+      (ok (string= "response text" (gethash "content" entry))))))
 
 
 (deftest test-to-api-messages-assistant-with-tools ()
@@ -102,18 +104,67 @@
          (api (to-api-messages msg)))
     (ok (= 3 (length api)))
     (let ((assistant-entry (first api)))
-      (ok (string= "assistant" (cdr (assoc "role" assistant-entry :test #'string=))))
-      (ok (null (cdr (assoc "content" assistant-entry :test #'string=))))
-      (let ((tool-calls (cdr (assoc "tool_calls" assistant-entry :test #'string=))))
+      (ok (string= "assistant" (gethash "role" assistant-entry)))
+      (ok (eq :null (gethash "content" assistant-entry)))
+      (let ((tool-calls (gethash "tool_calls" assistant-entry)))
         (ok (= 1 (length tool-calls)))
-        (let ((tc (first tool-calls)))
-          (ok (string= "call_abc" (cdr (assoc :id tc))))
+        (let ((tc (first (coerce tool-calls 'list))))
+          (ok (string= "call_abc" (gethash "id" tc)))
           (ok (string= "read-file"
-                       (cdr (assoc :name (cdr (assoc :function tc)))))))))
+                       (gethash "name" (gethash "function" tc)))))))
     (let ((tool-result-entry (second api)))
-      (ok (string= "tool" (cdr (assoc :role tool-result-entry))))
-      (ok (string= "call_abc" (cdr (assoc :tool_call_id tool-result-entry))))
-      (ok (string= "file contents here" (cdr (assoc :content tool-result-entry)))))
+      (ok (string= "tool" (gethash "role" tool-result-entry)))
+      (ok (string= "call_abc" (gethash "tool_call_id" tool-result-entry)))
+      (ok (string= "file contents here" (gethash "content" tool-result-entry))))
     (let ((text-entry (third api)))
-      (ok (string= "assistant" (cdr (assoc :role text-entry))))
-      (ok (string= "Here is the file." (cdr (assoc :content text-entry)))))))
+      (ok (string= "assistant" (gethash "role" text-entry)))
+      (ok (string= "Here is the file." (gethash "content" text-entry))))))
+
+
+(deftest test-make-response-message-with-events ()
+  (testing "nil events produces text-only message"
+    (let ((msg (make-response-message "hello" nil)))
+      (ok (typep msg 'message))
+      (ok (eq :assistant (message-role msg)))
+      (ok (= 1 (length (message-parts msg))))
+      (ok (string= "hello" (message-text msg)))))
+  (testing "tool events produce parts in order"
+    (let* ((events (list (list :tool-call "call_1" "read-file" "{\"target_file\":\"a.lisp\"}")
+                         (list :tool-result "call_1" "file contents")
+                         (list :tool-call "call_2" "search" "{\"term\":\"foo\"}")
+                         (list :tool-result "call_2" "found 2")))
+           (msg (make-response-message "done" events)))
+      (ok (= 5 (length (message-parts msg))))
+      (let ((call1 (first (message-parts msg))))
+        (ok (typep call1 'tool-call-part))
+        (ok (string= "read-file" (tool-call-part-tool-name call1)))
+        (ok (string= "call_1" (tool-call-part-call-id call1))))
+      (let ((result1 (second (message-parts msg))))
+        (ok (typep result1 'tool-result-part))
+        (ok (string= "call_1" (tool-result-part-call-id result1)))
+        (ok (string= "file contents" (tool-result-part-output result1))))
+      (let ((call2 (third (message-parts msg))))
+        (ok (typep call2 'tool-call-part))
+        (ok (string= "search" (tool-call-part-tool-name call2))))
+      (let ((result2 (fourth (message-parts msg))))
+        (ok (typep result2 'tool-result-part))
+        (ok (string= "call_2" (tool-result-part-call-id result2))))
+      (let ((text (fifth (message-parts msg))))
+        (ok (typep text 'text-part))
+        (ok (string= "done" (text-part-content text))))))
+  (testing "empty response with tool events"
+    (let* ((events (list (list :tool-call "c1" "bash" "{\"command\":\"ls\"}")
+                         (list :tool-result "c1" "file1.txt")))
+           (msg (make-response-message "" events)))
+      (ok (= 2 (length (message-parts msg))))
+      (ok (null (message-text msg))))))
+
+
+(deftest test-tool-result-part-metadata ()
+  (testing "default metadata is nil"
+    (let ((p (make-tool-result-part "c1" "output")))
+      (ok (null (tool-result-part-metadata p)))))
+  (testing "metadata can be provided"
+    (let ((p (make-tool-result-part "c1" "output" '((:elapsed-ms . 150)))))
+      (ok (= 1 (length (tool-result-part-metadata p))))
+      (ok (= 150 (cdr (assoc :elapsed-ms (tool-result-part-metadata p))))))))
