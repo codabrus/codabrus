@@ -6,6 +6,8 @@
   (:import-from #:local-time
                 #:now
                 #:format-timestring)
+  (:import-from #:serapeum
+                #:dict)
   (:export #:message
            #:message-role
            #:message-parts
@@ -146,11 +148,11 @@
 (defmethod to-api-messages ((msg message))
   (ecase (message-role msg)
     (:user
-     (list (list (cons :role "user")
-                 (cons :content (or (message-text msg) "")))))
+     (list (dict "role" "user"
+                 "content" (or (message-text msg) ""))))
     (:system
-     (list (list (cons :role "system")
-                 (cons :content (or (message-text msg) "")))))
+     (list (dict "role" "system"
+                 "content" (or (message-text msg) ""))))
     (:assistant
      (let ((tool-calls nil)
            (tool-results nil)
@@ -166,28 +168,28 @@
            (compaction-part nil)))
        (let ((entries nil))
          (when tool-calls
-           (push (list* (cons "role" "assistant")
-                        (cons "content" nil)
-                        (list (cons "tool_calls"
-                                    (mapcar (lambda (tc)
-                                              `((:id . ,(tool-call-part-call-id tc))
-                                                (:type . "function")
-                                                (:function . ((:name . ,(tool-call-part-tool-name tc))
-                                                              (:arguments . ,(tool-call-part-raw-args tc))))))
-                                            (nreverse tool-calls)))))
+           (push (dict "role" "assistant"
+                       "content" :null
+                       "tool_calls" (coerce
+                                     (loop for tc in (nreverse tool-calls)
+                                           collect (dict "id" (tool-call-part-call-id tc)
+                                                         "type" "function"
+                                                         "function" (dict "name" (tool-call-part-tool-name tc)
+                                                                          "arguments" (tool-call-part-raw-args tc))))
+                                     'vector))
                  entries)
            (dolist (result (nreverse tool-results))
-             (push (list (cons :role "tool")
-                         (cons :tool_call_id (tool-result-part-call-id result))
-                         (cons :content (tool-result-part-output result)))
+             (push (dict "role" "tool"
+                         "tool_call_id" (tool-result-part-call-id result)
+                         "content" (tool-result-part-output result))
                    entries)))
          (when text-content
-           (push (list (cons :role "assistant")
-                       (cons :content text-content))
+           (push (dict "role" "assistant"
+                       "content" text-content)
                  entries))
          (or (nreverse entries)
-             (list (list (cons :role "assistant")
-                         (cons :content (or text-content ""))))))))))
+             (list (dict "role" "assistant"
+                         "content" (or text-content "")))))))))
 
 
 ;;; make-response-message method
