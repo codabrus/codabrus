@@ -93,7 +93,7 @@ Initializes with defaults if SETUP was not called."
     (let ((response (session-response result)))
       (when response
         (format t "~&~A~%" response))
-      (cost result))
+      (cost))
     result))
 
 
@@ -102,29 +102,30 @@ Initializes with defaults if SETUP was not called."
   (session-response (chat message)))
 
 
-(defun show (session)
-  "Print the full conversation history of SESSION."
-  (when (and session (session-state session))
-    (dolist (msg (reverse (state-messages (session-state session))))
-      (when (typep msg 'message)
-        (format t "~&~A: ~A~%~%"
-                (message-role msg)
-                (or (message-text msg) "(no text)"))))))
+(defun show ()
+  "Print the full conversation history of the current session."
+  (if (and *session* (session-state *session*))
+      (dolist (msg (reverse (state-messages (session-state *session*))))
+        (when (typep msg 'message)
+          (format t "~&~A: ~A~%~%"
+                  (message-role msg)
+                  (or (message-text msg) "(no text)"))))
+      (format t "~&No session. Call (setup) first.~%")))
 
 
-(defun cost (session)
-  "Print token usage and cost for SESSION."
-  (format t "~&[tokens: ~A in / ~A out | cost: $~,3F]~%"
-          (session-tokens-in session)
-          (session-tokens-out session)
-          (session-total-cost-usd session)))
+(defun cost ()
+  "Print token usage and cost for the current session."
+  (if *session*
+      (format t "~&[tokens: ~A in / ~A out | cost: $~,3F]~%"
+              (session-tokens-in *session*)
+              (session-tokens-out *session*)
+              (session-total-cost-usd *session*))
+      (format t "~&No session. Call (setup) first.~%")))
 
 
 (defun history ()
   "Print the current session's conversation history."
-  (if *session*
-      (show *session*)
-      (format t "~&No session. Call (setup) first.~%")))
+  (show))
 
 
 (defun last-response ()
