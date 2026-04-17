@@ -8,9 +8,11 @@ exec ros -Q -- $0 "$@"
   (loop for dep-dir in (directory (merge-pathnames uiop:*wild-directory*
                                                    (asdf:system-relative-pathname :codabrus
                                                                                   "libs/")))
-        do (pushnew dep-dir
-                    asdf:*central-registry*
-                    :test #'uiop:pathname-equal)))
+        unless (string= (car (last (pathname-directory dep-dir)))
+                        "completions")
+          do (pushnew dep-dir
+                      asdf:*central-registry*
+                      :test #'uiop:pathname-equal)))
 
 
 (progn ;;init forms

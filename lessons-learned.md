@@ -217,12 +217,21 @@
 ;; => #<HASH-TABLE "a" → 1, "b" → {"nested" → 42}>
 
 ;; НЕПРАВИЛЬНО:
-(make-hash-table :test 'equal)
-(setf (gethash "a" ht) 1)
-;; НЕПРАВИЛЬНО:
 '((:a . 1) (:b . 2))  ;; alists для JSON-данных
 ```
 
-Флаги YASON, которые нужны: `:json-arrays-as-vectors t`, `:json-booleans-as-symbols t`, `:json-nulls-as-keyword t`. Без последнего и `nil`, и `[]` превращаются в пустой JSON-массив.
+Флаги YASON для round-trip: `:json-arrays-as-vectors t`, `:json-booleans-as-symbols t`, `:json-nulls-as-keyword t`. Без последнего и `nil`, и `[]` превращаются в пустой JSON-массив.
+
+**`yason:with-output-to-string*` не передавайте nil в encode.** Макрос устанавливает выходной поток, но его нужно использовать без явного stream-аргумента:
+
+```lisp
+;; ПРАВИЛЬНО:
+(yason:with-output-to-string* ()
+  (yason:encode object))
+
+;; НЕПРАВИЛЬНО — nil подавляет вывод, возвращает пустую строку:
+(yason:with-output-to-string* ()
+  (yason:encode object nil))
+```
 
 Провайдеры (`openai.lisp`, будущие `anthropic.lisp` и т.д.) должны `:import-from #:40ants-ai-agents/utils #:json-encode #:json-parse`. Сейчас в `openai.lisp` и `llm-provider.lisp` ещё остались локальные `%json-encode`/`%json-parse` — их нужно заменить на импорт из utils.

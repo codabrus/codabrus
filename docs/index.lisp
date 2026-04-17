@@ -60,6 +60,7 @@
 "
   (@installation section)
   (@usage section)
+  (@repl section)
   (@logging-and-audit section)
   (@api section))
 
@@ -139,6 +140,97 @@ I'll look at the test failures and fix them...
 
 Sessions are saved automatically after each run. No data is lost if the process
 crashes — everything written up to the last completed turn is persisted.
+""")
+
+
+(defsection @repl (:title "REPL Testing")
+  """
+The `codabrus/repl` package provides convenience functions for interactive
+testing from the Lisp REPL.
+
+## Setup
+
+```
+(asdf:load-system "codabrus")
+
+;; Initialize API key, model, and session
+(codabrus/repl:setup)
+;; => Ready. Model=deepseek-chat Dir=/path/to/project Session=uuid
+
+;; With options
+(codabrus/repl:setup :model "claude-3-opus"
+                      :project-dir #p"/path/to/project"
+                      :max-turns 5
+                      :max-cost-usd 0.10d0)
+```
+
+`setup` reads the API key from secrets by default. Pass `:api-key` to
+override.
+
+## Sending messages
+
+```
+;; Send a message, print response and cost, update *session*
+(codabrus/repl:chat "List files in current directory")
+
+;; Continue the conversation — same session
+(codabrus/repl:chat "Now fix the first bug you find")
+
+;; With verbose tool logging
+(codabrus/repl:chat "Search for TODO comments" :verbose t)
+;;   [CALL] search-file "TODO"
+;;   [RESULT] src/foo.lisp:42: TODO fix this ...
+;; I found TODO comments in the following files...
+
+;; Return just the response text (no printing)
+;; (let ((text (codabrus/repl:chat* "What is this project?")))
+;;   (length text))
+```
+
+## Inspecting state
+
+```
+;; Current session object
+codabrus/repl:*session*
+
+;; Last response text
+(codabrus/repl:last-response)
+
+;; Print full conversation history
+(codabrus/repl:history)
+
+;; Print token usage and cost
+(codabrus/repl:cost codabrus/repl:*session*)
+
+;; Print history of any session
+(codabrus/repl:show codabrus/repl:*session*)
+```
+
+## Switching providers
+
+```
+;; Gemini
+(codabrus/repl:setup :model "gemini-2.0-flash" :api-key "...")
+
+;; Claude
+(codabrus/repl:setup :model "claude-3-opus" :api-key "...")
+
+;; Ollama (local, no key needed)
+(codabrus/repl:setup :model "llama3.2" :api-key "unused")
+```
+
+## Quick reference
+
+| Function | Description |
+|---|---|
+| `setup &key project-dir model api-key max-turns max-cost-usd` | Initialize session and API key |
+| `chat message &key verbose` | Send message, print response, return session |
+| `chat* message` | Send message, return response text only |
+| `show session` | Print full conversation history |
+| `cost session` | Print token usage and cost |
+| `history` | Print current session history |
+| `last-response` | Return last assistant response text |
+| `*session*` | Current session object (updated by `chat`) |
 """)
 
 

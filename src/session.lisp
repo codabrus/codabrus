@@ -30,6 +30,7 @@
                 #:message-role
                 #:message-parts
                 #:message-text
+                #:message-created-at
                 #:make-user-message
                 #:make-step-end-part)
   (:import-from #:uuid
