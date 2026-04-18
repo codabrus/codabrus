@@ -19,18 +19,33 @@ exec ros -Q -- $0 "$@"
   (ros:ensure-asdf)
 
   (extend-registry)
+
+  (let* ((dev-null
+           ;; To suppress this message, which brokes
+           ;; some MCP clients when using STDIO transport
+           ;; SLYNK's ASDF loader finished
+           (make-broadcast-stream))
+         (*debug-io* dev-null)
+         (*standard-output* dev-null)
+         ;; Probably this is not a good idea?
+         ;; I don't know, just leave it as is for now
+         (*error-output* dev-null))
+    (ql:quickload (list "slynk")
+                  :silent t))
   
-  #+quicklisp
   (ql:quickload '("40ants-asdf-system"
                   "codabrus"
-                  "codabrus/main")
+                  "codabrus/cli/new"
+                  "codabrus/cli/resume"
+                  "codabrus/cli/ls"
+                  "codabrus/cli/serve")
                 :silent t)
   (sb-ext:gc :full t))
 
 
 (defpackage :ros.script.codabrus
   (:use :cl)
-  (:import-from #:codabrus/main
+  (:import-from #:codabrus/cli/main
                 #:main))
 (in-package :ros.script.codabrus)
 

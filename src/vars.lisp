@@ -22,7 +22,7 @@
   "Ordered list of functions for reading API tokens. Each function accepts a provider name
    (string, e.g. \"deepseek\") and returns the token string or NIL if not found.
    Readers are tried in order; the first non-NIL result is used.
-   Default readers are set in codabrus/main. Users may push custom readers
+   Default readers are set in codabrus/cli/main. Users may push custom readers
    (e.g. macOS Keychain, Vault) from .local-config.lisp or ~/.codabrus/config.lisp.")
 
 (defvar *headless-mode* nil
