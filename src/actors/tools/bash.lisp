@@ -27,6 +27,16 @@
               :reader bash-exit-code)))
 
 
+(defmethod print-object ((obj bash) stream)
+  (print-unreadable-object (obj stream :type t)
+    (format stream "~S :exit-code ~A~@[ :stdout ~A~]~@[ :stderr ~A~]"
+            (bash-command obj)
+            (bash-exit-code obj)
+            (let ((len (length (bash-stdout obj))))
+              (when (plusp len) len))
+            (let ((len (length (bash-stderr obj))))
+              (when (plusp len) len)))))
+
 
 (defun make-bash (command)
   (make-clos-actor 'bash
