@@ -14,3 +14,4 @@
 
 
 (asdf:register-system-packages "log4cl" '("LOG"))
+(asdf:register-system-packages "sento" '("SENTO.ACTOR-SYSTEM" "SENTO.ACTOR-CONTEXT" "SENTO.ACTOR" "SENTO.EVENTSTREAM"))
