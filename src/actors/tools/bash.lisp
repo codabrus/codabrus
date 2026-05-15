@@ -2,7 +2,9 @@
   (:use #:cl)
   (:import-from #:codabrus/actors/generic
                 #:process-message
-                #:make-clos-actor))
+                #:make-clos-actor)
+  (:export
+   #:make-bash))
 (in-package #:codabrus/actors/tools/bash)
 
 
@@ -24,7 +26,10 @@
            :reader bash-stderr)
    (exit-code :type (or null integer)
               :initform nil
-              :reader bash-exit-code)))
+              :reader bash-exit-code)
+   (on-completion :type (or null sento.actor:actor)
+                  :initform nil
+                  :accessor bash-on-completion)))
 
 
 (defmethod print-object ((obj bash) stream)
@@ -99,10 +104,12 @@
         (funcall on-exit code)))))
 
 
-(defmethod process-message ((obj bash) (message (eql :run)) &key)
+(defmethod process-message ((obj bash) (message (eql :run)) &key on-completion)
+  (when on-completion
+    (setf (bash-on-completion obj) on-completion))
   (let ((command (bash-command obj)))
     (log:info "Running command" command)
-           
+            
     (tasks:with-context (act:*self*)
       (let ((caller act:*self*))
         ;; (act:become (make-shell-runner-waiting))
@@ -125,7 +132,10 @@
 
 (defmethod process-message ((obj bash) (message (eql :on-exit)) &key code)
   (setf (slot-value obj 'exit-code)
-        code))
+        code)
+  (when (bash-on-completion obj)
+    (act:ask (bash-on-completion obj)
+             (list :completed :actor act:*self*))))
 
 (defmethod process-message ((obj bash) (message (eql :is-finished)) &key)
   (when (bash-exit-code obj)

@@ -9,7 +9,9 @@
   :class :40ants-asdf-system
   :defsystem-depends-on ("40ants-asdf-system")
   :pathname "src"
-  :depends-on ("codabrus/core")
+  :depends-on ("codabrus/core"
+               "codabrus/actors/tools/dispatcher"
+               "codabrus/actors/tools/bash")
   :in-order-to ((test-op (test-op "codabrus-tests"))))
 
 
