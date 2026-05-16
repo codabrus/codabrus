@@ -58,3 +58,57 @@
                (ok (search "world" (second outputs)))))))
     (stop-actor-system)
     (values)))
+
+
+(deftest test-dispatcher-sequential-runs
+  "This test checks if dispatcher will serialize consequent calls to :run."
+  (let ((tmpfile (merge-pathnames "codabrus-dispatcher-test-foo" (uiop:temporary-directory))))
+    (uiop:delete-file-if-exists tmpfile)
+    (ensure-actor-system)
+    (unwind-protect
+         (let ((rounds-completed 0)
+               (all-tools nil)
+               (lock (bt2:make-lock))
+               (cvar (bt2:make-condition-variable)))
+           (let ((dispatcher (make-tools-dispatcher)))
+             (act:ask dispatcher
+                      (list :run
+                            :tool-specs (list (list 'make-bash
+                                                    (format nil "sleep 1 && echo Some > ~A"
+                                                            (namestring tmpfile))))
+                            :on-completion (lambda (message &key tools &allow-other-keys)
+                                             (declare (ignore message))
+                                             (bt2:with-lock-held (lock)
+                                               (incf rounds-completed)
+                                               (setf all-tools (append all-tools tools))
+                                               (bt2:condition-broadcast cvar)))))
+             (act:ask dispatcher
+                      (list :run
+                            :tool-specs (list (list 'make-bash
+                                                    (format nil "cat ~A"
+                                                            (namestring tmpfile))))
+                            :on-completion (lambda (message &key tools &allow-other-keys)
+                                             (declare (ignore message))
+                                             (bt2:with-lock-held (lock)
+                                               (incf rounds-completed)
+                                               (setf all-tools (append all-tools tools))
+                                               (bt2:condition-broadcast cvar)))))
+             
+             ;; Wait while both :runs will complete
+             (bt2:with-lock-held (lock)
+               (loop while (< rounds-completed 2)
+                     do (bt2:condition-wait cvar lock :timeout 15)))
+             
+             (testing "both rounds completed"
+               (ok (= rounds-completed 2)))
+             
+             (let ((cat-output (str:join #\Newline
+                                         (coerce
+                                          (bash-stdout
+                                           (act:ask-s (second all-tools) :get-state))
+                                          'list))))
+               (testing "cat read the file written by first run"
+                 (ok (search "Some" cat-output))))))
+      (uiop:delete-file-if-exists tmpfile)
+      (stop-actor-system)
+      (values))))
