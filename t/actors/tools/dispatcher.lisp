@@ -10,7 +10,8 @@
   (:import-from #:codabrus/actors/tools/dispatcher
                 #:make-tools-dispatcher)
   (:import-from #:codabrus/actors/tools/bash
-                #:make-bash))
+                #:make-bash
+                #:bash-stdout))
 (in-package #:codabrus-tests/actors/tools/dispatcher)
 
 
@@ -40,5 +41,18 @@
            (testing "message type is :completed"
              (ok (eq (first callback-result) :completed)))
            (testing "two tools completed"
-             (ok (= (length (second callback-result)) 2)))))
-    (stop-actor-system)))
+             (ok (= (length (second callback-result)) 2)))
+           (let ((outputs (sort
+                           (loop for tool in (second callback-result)
+                                 collect (str:join #\Newline
+                                                   (coerce
+                                                    (bash-stdout
+                                                     (act:ask-s tool :get-state))
+                                                    'list)))
+                           #'string<)))
+             (testing "first tool output"
+               (ok (search "hello" (first outputs))))
+             (testing "second tool output"
+               (ok (search "world" (second outputs)))))))
+    (stop-actor-system)
+    (values)))
