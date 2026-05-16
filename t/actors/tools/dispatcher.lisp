@@ -33,9 +33,11 @@
                                              (setf callback-called t
                                                    callback-result (list message tools))
                                              (bt2:condition-broadcast callback-cvar)))))
+           ;; Waiting when callback will be called
            (bt2:with-lock-held (callback-lock)
              (unless callback-called
                (bt2:condition-wait callback-cvar callback-lock :timeout 10)))
+           
            (testing "callback was called"
              (ok callback-called))
            (testing "message type is :completed"
