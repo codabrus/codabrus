@@ -2,13 +2,21 @@
   (:use #:cl)
   (:import-from #:codabrus/actors/vars
                 #:*actor-system*)
+  (:import-from #:codabrus/actors/actor
+                #:stashing-actor)
   (:export #:process-message
-           #:make-clos-actor))
+           #:make-clos-actor
+           #:*message*))
 (in-package #:codabrus/actors/generic)
 
 
+(defvar *message* nil
+  "The raw message plist as received by the actor's receive function.
+Bound dynamically so that process-message handlers can access it for stashing.")
+
+
 (defgeneric process-message (obj name &key &allow-other-keys)
-  (:documentation "Define a method for this generic function to make object of some type handle a message with NAME argument given as a keyword." ))
+  (:documentation "Define a method for this generic function to make object of some type handle a message with NAME argument given as a keyword."))
 
 
 (defmethod process-message ((obj t) (method (eql :get-state)) &key)
@@ -20,11 +28,15 @@
   (let ((other-args (alexandria:remove-from-plist initargs :name)))
     (ac:actor-of *actor-system*
                  :name name
+                 :type 'stashing-actor
                  :receive (lambda (message)
-                            (apply #'process-message
-                                   act:*state*
-                                   (uiop:ensure-list message)))
+                            (let ((*message* message))
+                              (let ((result (apply #'process-message
+                                                   act:*state*
+                                                   (uiop:ensure-list message))))
+                                (if (eq result :stashed)
+                                    (cons :no-reply act:*state*)
+                                    result))))
                  :state (apply #'make-instance
                                class
                                other-args))))
-

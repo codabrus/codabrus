@@ -13,6 +13,7 @@
                 "codabrus-tests/session-store"
                 "codabrus-tests/edit-file"
                 "codabrus-tests/bash"
+                "codabrus-tests/actors/tools/dispatcher"
                 "codabrus-tests/integration")
   :perform (test-op (op c)
                     (unless (symbol-call :rove :run c)
