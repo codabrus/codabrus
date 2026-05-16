@@ -246,3 +246,32 @@
                                  act:*state*
                                  (uiop:ensure-list message)))
                :state (make-instance 'foo)))
+
+
+
+
+(defun make-interruptable-actor-loop-example ()
+  (ac:actor-of *sys*
+               :destroy (lambda (&rest args)
+                          ;; По сообщению :stop актор будет полностью
+                          ;; остановлен и его нельзя будет запустить ещё раз
+                          (log:info "Destroy called with ARGS = ~A" args))
+               :receive (let ((stopped nil))
+                          (lambda (message)
+                            (log:info "Processing" message)
+                            (case message
+                              ;; Но с помощью :break итерацию можно приостановить,
+                              ;; а потом продолжить заново с помощью :run.
+                              (:break
+                                 (log:info "Stopping")
+                                 (setf stopped t))
+                              (:run
+                                 (log:info "Running")
+                                 (setf stopped nil)
+                                 (act:tell act:*self* :next-iteration))
+                              (t
+                                 (unless stopped
+                                   (log:info "Sleeping")
+                                   (sleep 3)
+                                   (log:info "Going to next iteration")
+                                   (act:tell act:*self* :next-iteration))))))))
