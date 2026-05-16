@@ -3,6 +3,9 @@
   (:import-from #:codabrus/actors/generic
                 #:process-message
                 #:make-clos-actor)
+  (:import-from #:codabrus/actors/callbacks
+                #:call-callback
+                #:callback-type)
   (:export #:make-tools-dispatcher))
 (in-package #:codabrus/actors/tools/dispatcher)
 
@@ -16,7 +19,10 @@
             :accessor tools-dispatcher-pending)
    (completed :type list
               :initform nil
-              :accessor tools-dispatcher-completed)))
+              :accessor tools-dispatcher-completed)
+   (on-completion :type callback-type
+                  :initform nil
+                  :accessor tools-dispatcher-on-completion)))
 
 
 (defmethod print-object ((obj tools-dispatcher) stream)
@@ -33,7 +39,9 @@
                    :tool-specs tool-specs))
 
 
-(defmethod process-message ((obj tools-dispatcher) (message (eql :run)) &key)
+(defmethod process-message ((obj tools-dispatcher) (message (eql :run)) &key on-completion)
+  (when on-completion
+    (setf (tools-dispatcher-on-completion obj) on-completion))
   (loop for spec in (tools-dispatcher-tool-specs obj)
         for constructor = (first spec)
         for args = (rest spec)
@@ -50,4 +58,9 @@
   (push actor (tools-dispatcher-completed obj))
   (when (null (tools-dispatcher-pending obj))
     (log:info "All tools completed"
-              (length (tools-dispatcher-completed obj)))))
+              (length (tools-dispatcher-completed obj)))
+    (when (tools-dispatcher-on-completion obj)
+      (call-callback (tools-dispatcher-on-completion obj)
+                     :completed
+                     :actor act:*self*
+                     :tools (tools-dispatcher-completed obj)))))

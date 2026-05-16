@@ -3,6 +3,9 @@
   (:import-from #:codabrus/actors/generic
                 #:process-message
                 #:make-clos-actor)
+  (:import-from #:codabrus/actors/callbacks
+                #:call-callback
+                #:callback-type)
   (:export
    #:make-bash))
 (in-package #:codabrus/actors/tools/bash)
@@ -27,7 +30,7 @@
    (exit-code :type (or null integer)
               :initform nil
               :reader bash-exit-code)
-   (on-completion :type (or null sento.actor:actor)
+   (on-completion :type callback-type
                   :initform nil
                   :accessor bash-on-completion)))
 
@@ -134,8 +137,9 @@
   (setf (slot-value obj 'exit-code)
         code)
   (when (bash-on-completion obj)
-    (act:ask (bash-on-completion obj)
-             (list :completed :actor act:*self*))))
+    (call-callback (bash-on-completion obj)
+                   :completed
+                   :actor act:*self*)))
 
 (defmethod process-message ((obj bash) (message (eql :is-finished)) &key)
   (when (bash-exit-code obj)

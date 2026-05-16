@@ -264,6 +264,27 @@ Sento actors handle all mutable state. The pattern:
 
 Tool calls that are independent can be fanned out to a thread pool via `bt:make-thread` or Sento's async patterns, then joined before appending results.
 
+### On-completion Callbacks
+
+Actors that perform async work (tool execution, sub-dispatching) notify their parent via an `:on-completion` callback. The `callback-type` (defined in `src/actors/callbacks.lisp`) accepts:
+
+| Type | Behaviour |
+|------|-----------|
+| `sento.actor:actor` | Sends message via `act:ask` |
+| `string` | Resolves actor by name in `*actor-system*`, then sends message |
+| `symbol` (fbound) | Calls `(symbol-function sym)` with the message |
+| `function` | Calls `(funcall fn message)` |
+
+Every callback invocation follows a uniform protocol: the message is a list whose first element is a **keyword** identifying the event type (e.g. `:completed`), followed by **keyword-value pairs** carrying event-specific data. For example:
+
+```lisp
+(:completed :actor <dispatcher> :tools (<tool1> <tool2>))
+```
+
+For forward compatibility, message handlers must accept unknown keyword arguments. Actor methods use `&allow-other-keys` in their lambda lists, and plain functions passed as callbacks should likewise use `(&key &allow-other-keys)` so that new keys can be added without breaking existing consumers.
+
+The calling actor passes its callback as `:on-completion` to the `:run` message. The child stores it and calls `call-callback` when finished. This composes: a `tools-dispatcher` can be a child of another `tools-dispatcher`, forming a tree of parallel work with cascading completion.
+
 ---
 
 ## Security Model
