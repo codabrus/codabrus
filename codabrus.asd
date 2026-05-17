@@ -9,8 +9,12 @@
   :class :40ants-asdf-system
   :defsystem-depends-on ("40ants-asdf-system")
   :pathname "src"
-  :depends-on ("codabrus/core")
+  :depends-on ("codabrus/core"
+               "codabrus/actors/tools/dispatcher"
+               "codabrus/actors/tools/bash"
+               "codabrus/actors/llm-agent")
   :in-order-to ((test-op (test-op "codabrus-tests"))))
 
 
 (asdf:register-system-packages "log4cl" '("LOG"))
+(asdf:register-system-packages "sento" '("SENTO.ACTOR-SYSTEM" "SENTO.ACTOR-CONTEXT" "SENTO.ACTOR" "SENTO.EVENTSTREAM" "SENTO.STASH"))
