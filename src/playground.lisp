@@ -1,5 +1,6 @@
 (uiop:define-package #:codabrus/playground
-  (:use #:cl))
+  (:use #:cl)
+  (:import-from #:CODABRUS/ACTORS/ACTOR-SYSTEM))
 (in-package #:codabrus/playground)
 
 
@@ -184,10 +185,13 @@
                           (shell-runner-receive msg))))
 
 
-(defparameter *runner* (make-runner))
+(defvar *runner* nil)
 
 
 (defun run (command)
+  (unless *runner*
+    (setf *runner*
+          (make-runner)))
   (act:ask-s *runner*
              (list :run command)))
 
@@ -275,3 +279,78 @@
                                    (sleep 3)
                                    (log:info "Going to next iteration")
                                    (act:tell act:*self* :next-iteration))))))))
+
+
+;;;; Testing LLM agent actor
+
+(defun make-tool-registry ()
+  (let ((registry (make-hash-table :test 'equal)))
+    (setf (gethash "bash" registry)
+          (lambda (args)
+            (list 'codabrus/actors/tools/bash:make-bash
+                  (gethash "command" args))))
+    registry))
+
+
+(defun test-llm-agent (&key (prompt "You are a helpful assistant."))
+  (codabrus/actors/actor-system:ensure-actor-system)
+  (let* ((api-key (or (uiop:getenv "DEEPSEEK_API_TOKEN")
+                      (error "Set DEEPSEEK_API_TOKEN env var")))
+         (provider (make-instance '40ants-ai-agents/llm-provider/openai:openai-provider
+                                  :endpoint "https://api.deepseek.com/chat/completions"
+                                  :api-key api-key
+                                  :model "deepseek-chat"
+                                  :tools nil))
+         (registry (make-tool-registry))
+         (agent (codabrus/actors/llm-agent:make-llm-agent provider prompt registry))
+         (result nil)
+         (lock (bt2:make-lock))
+         (cvar (bt2:make-condition-variable)))
+    (act:ask agent
+             (list :run
+                   :messages (list (serapeum:dict "role" "user"
+                                                  "content" "Say hello in one sentence in russian."))
+                   :on-completion (lambda (message &key text messages &allow-other-keys)
+                                    (declare (ignore messages))
+                                    (bt2:with-lock-held (lock)
+                                      (setf result (cons message text))
+                                      (bt2:condition-broadcast cvar)))))
+    (bt2:with-lock-held (lock)
+      (unless result
+        (let ((success (bt2:condition-wait cvar lock :timeout 30)))
+          (unless success
+            (log:error "Request timed out.")))))
+    (log:info "LLM agent result: ~A" result)
+    result))
+
+
+(defun test-llm-agent-with-tools (&key (prompt "You are a helpful assistant with access to a bash tool. Use it when needed."))
+  (codabrus/actors/actor-system:ensure-actor-system)
+  (let* ((api-key (or (uiop:getenv "DEEPSEEK_API_TOKEN")
+                      (error "Set DEEPSEEK_API_TOKEN env var")))
+         (provider (make-instance '40ants-ai-agents/llm-provider/openai:openai-provider
+                                  :endpoint "https://api.deepseek.com/chat/completions"
+                                  :api-key api-key
+                                  :model "deepseek-chat"
+                                  :tools '(codabrus/tools/bash:bash)))
+         (registry (make-tool-registry))
+         (agent (codabrus/actors/llm-agent:make-llm-agent provider prompt registry))
+         (result nil)
+         (lock (bt2:make-lock))
+         (cvar (bt2:make-condition-variable)))
+    (act:ask agent
+             (list :run
+                   :messages (list (serapeum:dict "role" "user"
+                                                  "content" "What files are in /tmp?"))
+                   :on-completion (lambda (message &key text messages &allow-other-keys)
+                                    (declare (ignore messages))
+                                    (bt2:with-lock-held (lock)
+                                      (setf result (cons message text))
+                                      (bt2:condition-broadcast cvar)))))
+    (bt2:with-lock-held (lock)
+      (unless result
+        (let ((success (bt2:condition-wait cvar lock :timeout 60)))
+          (unless success
+            (log:error "Request timed out.")))))
+    (log:info "LLM agent result: ~A" result)
+    result))

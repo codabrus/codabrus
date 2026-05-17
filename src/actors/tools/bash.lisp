@@ -6,8 +6,9 @@
   (:import-from #:codabrus/actors/callbacks
                 #:call-callback
                 #:callback-type)
-  (:export
-   #:make-bash))
+  (:import-from #:codabrus/actors/tools/generic
+                #:render-tool-result)
+  (:export #:make-bash))
 (in-package #:codabrus/actors/tools/bash)
 
 
@@ -32,7 +33,9 @@
               :reader bash-exit-code)
    (on-completion :type callback-type
                   :initform nil
-                  :accessor bash-on-completion)))
+                  :accessor bash-on-completion)
+   (process-info :initform nil
+                 :accessor bash-process-info)))
 
 
 (defmethod print-object ((obj bash) stream)
@@ -51,12 +54,14 @@
                    :command command))
 
 
-(defun run-async (command &key on-stdout-line on-stderr-line on-exit)
-  (let* ((process (uiop:launch-program command 
-                                       :output :stream 
+(defun run-async (command &key on-start on-stdout-line on-stderr-line on-exit)
+  (let* ((process (uiop:launch-program command
+                                       :output :stream
                                        :error-output :stream))
          (out (uiop:process-info-output process))
          (err (uiop:process-info-error-output process)))
+    (when on-start
+      (funcall on-start process))
     (loop with out-buffer = (make-string-output-stream)
           with err-buffer = (make-string-output-stream)
           do ;; Non-blocking read from stdout
@@ -66,7 +71,7 @@
                    when (char= char #\newline)
                      do (when on-stdout-line
                           (funcall on-stdout-line
-                                   (get-output-stream-string out-buffer))) ; process line
+                                   (get-output-stream-string out-buffer)))
                         (setf out-buffer (make-string-output-stream)))
              ;; similarly for stderr
              (loop for char = (read-char-no-hang err nil :eof)
@@ -76,7 +81,7 @@
                      do (when on-stderr-line
                           (funcall on-stderr-line (get-output-stream-string err-buffer)))
                         (setf err-buffer (make-string-output-stream)))
-             
+
              (when (not (uiop:process-alive-p process))
                ;; process done, but check if there's remaining data (flush buffers after loop)
                (loop for char = (read-char-no-hang out nil :eof)
@@ -94,16 +99,11 @@
                  (when (and on-stderr-line
                             (plusp (length rem-err)))
                    (funcall on-stderr-line rem-err)))
-               ;; (log:info "Exiting from the loop")
                (return))
-             ;; possibly do other work or sleep to avoid busy-loop
-             ;; (log:info "Going to sleep")
              (sleep 0.5))
     ;; finally get exit code
     (when on-exit
-      ;; (log:info "Calling on exit")
       (let ((code (uiop:wait-process process)))
-        ;; (log:info "Exit code is" code)
         (funcall on-exit code)))))
 
 
@@ -112,19 +112,24 @@
     (setf (bash-on-completion obj) on-completion))
   (let ((command (bash-command obj)))
     (log:info "Running command" command)
-            
+
     (tasks:with-context (act:*self*)
       (let ((caller act:*self*))
-        ;; (act:become (make-shell-runner-waiting))
         (sento.tasks:task-async
          (lambda ()
            (run-async command
+                      :on-start (lambda (proc)
+                                  (act:ask caller (list :process-started :process proc)))
                       :on-stdout-line (lambda (line)
                                         (act:ask caller (list :on-stdout :line line)))
                       :on-stderr-line (lambda (line)
                                         (act:ask caller (list :on-stderr :line line)))
                       :on-exit (lambda (code)
                                  (act:ask caller (list :on-exit :code code))))))))))
+
+
+(defmethod process-message ((obj bash) (message (eql :process-started)) &key process)
+  (setf (bash-process-info obj) process))
 
 
 (defmethod process-message ((obj bash) (message (eql :on-stdout)) &key line)
@@ -141,6 +146,20 @@
                    :completed
                    :actor act:*self*)))
 
+(defmethod process-message ((obj bash) (message (eql :interrupt)) &key)
+  (let ((proc (bash-process-info obj)))
+    (when (and proc (uiop:process-alive-p proc))
+      (log:info "Interrupting bash command" (bash-command obj))
+      (uiop:terminate-process proc :urgent t)))
+  (when (bash-on-completion obj)
+    (call-callback (bash-on-completion obj)
+                   :interrupted
+                   :actor act:*self*)))
+
 (defmethod process-message ((obj bash) (message (eql :is-finished)) &key)
   (when (bash-exit-code obj)
     t))
+
+
+(defmethod render-tool-result ((obj bash))
+  (str:join #\Newline (coerce (bash-stdout obj) 'list)))

@@ -4,6 +4,8 @@
                 #:*actor-system*)
   (:import-from #:codabrus/actors/actor
                 #:stashing-actor)
+  (:import-from #:log4cl-extras/error
+                #:with-log-unhandled)
   (:export #:process-message
            #:make-clos-actor
            #:*message*))
@@ -30,13 +32,14 @@ Bound dynamically so that process-message handlers can access it for stashing.")
                  :name name
                  :type 'stashing-actor
                  :receive (lambda (message)
-                            (let ((*message* message))
-                              (let ((result (apply #'process-message
-                                                   act:*state*
-                                                   (uiop:ensure-list message))))
-                                (if (eq result :stashed)
+                            (with-log-unhandled ()
+                              (let ((*message* message))
+                                (let ((result (apply #'process-message
+                                                     act:*state*
+                                                     (uiop:ensure-list message))))
+                                  (if (eq result :stashed)
                                     (cons :no-reply act:*state*)
-                                    result))))
+                                    result)))))
                  :state (apply #'make-instance
                                class
                                other-args))))

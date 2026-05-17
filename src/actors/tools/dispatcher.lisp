@@ -83,3 +83,21 @@
                    :tools (tools-dispatcher-completed obj)))
   (setf (tools-dispatcher-status obj) :free)
   (unstash-all))
+
+
+(defmethod process-message ((obj tools-dispatcher) (message (eql :interrupt)) &key)
+  (when (eq (tools-dispatcher-status obj) :busy)
+    (loop for tool-actor in (tools-dispatcher-pending obj)
+          do (act:ask tool-actor (list :interrupt)))
+    (let ((callback (tools-dispatcher-on-completion obj)))
+      (setf (tools-dispatcher-status obj) :free
+            (tools-dispatcher-pending obj) nil
+            (tools-dispatcher-completed obj) nil
+            (tools-dispatcher-on-completion obj) nil)
+      (when callback
+        (call-callback callback :interrupted :actor act:*self*))
+      (unstash-all))))
+
+
+(defmethod process-message ((obj tools-dispatcher) (message (eql :interrupted)) &key actor)
+  (declare (ignore actor)))
