@@ -142,7 +142,7 @@
           for fn-name = (gethash "name" func)
           for raw-args = (gethash "arguments" func)
           for args = (json-parse raw-args)
-          for factory = (gethash fn-name registry)
+          for factory = (gethash (string-downcase fn-name) registry)
           do (let* ((spec (funcall factory args))
                     (actor (apply (first spec) (rest spec))))
                (setf (gethash actor call-id-map)

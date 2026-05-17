@@ -144,7 +144,8 @@
   (when (bash-on-completion obj)
     (call-callback (bash-on-completion obj)
                    :completed
-                   :actor act:*self*)))
+                   :actor act:*self*
+                   :result (render-tool-result obj))))
 
 (defmethod process-message ((obj bash) (message (eql :interrupt)) &key)
   (let ((proc (bash-process-info obj)))
