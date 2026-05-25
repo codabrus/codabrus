@@ -10,8 +10,7 @@
   (:import-from #:codabrus/actors/tools/dispatcher
                 #:make-tools-dispatcher)
   (:import-from #:codabrus/actors/tools/bash
-                #:make-bash
-                #:bash-stdout))
+                #:make-bash))
 (in-package #:codabrus-tests/actors/tools/dispatcher)
 
 
@@ -44,18 +43,14 @@
              (ok (eq (first callback-result) :completed)))
            (testing "two tools completed"
              (ok (= (length (second callback-result)) 2)))
-           (let ((outputs (sort
-                           (loop for tool in (second callback-result)
-                                 collect (str:join #\Newline
-                                                   (coerce
-                                                    (bash-stdout
-                                                     (act:ask-s tool :get-state))
-                                                    'list)))
-                           #'string<)))
-             (testing "first tool output"
-               (ok (search "hello" (first outputs))))
-             (testing "second tool output"
-               (ok (search "world" (second outputs)))))))
+            (let ((outputs (sort
+                            (loop for (_ . result) in (second callback-result)
+                                  collect result)
+                            #'string<)))
+              (testing "first tool output"
+                (ok (search "hello" (first outputs))))
+              (testing "second tool output"
+                (ok (search "world" (second outputs)))))))
     (stop-actor-system)
     (values)))
 
@@ -102,13 +97,9 @@
              (testing "both rounds completed"
                (ok (= rounds-completed 2)))
              
-             (let ((cat-output (str:join #\Newline
-                                         (coerce
-                                          (bash-stdout
-                                           (act:ask-s (second all-tools) :get-state))
-                                          'list))))
-               (testing "cat read the file written by first run"
-                 (ok (search "Some" cat-output))))))
+              (let ((cat-output (cdr (second all-tools))))
+                (testing "cat read the file written by first run"
+                  (ok (search "Some" cat-output))))))
        (uiop:delete-file-if-exists tmpfile)
        (stop-actor-system)
        (values))))

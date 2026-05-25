@@ -8,10 +8,7 @@
                 #:ensure-actor-system
                 #:stop-actor-system)
   (:import-from #:codabrus/actors/tools/bash
-                #:make-bash
-                #:bash-stdout)
-  (:import-from #:codabrus/actors/tools/generic
-                #:render-tool-result))
+                #:make-bash))
 (in-package #:codabrus-tests/actors/tools/bash)
 
 
@@ -46,25 +43,21 @@
 (deftest test-render-tool-result
   (ensure-actor-system)
   (unwind-protect
-       (let ((callback-called nil)
+       (let ((callback-result nil)
              (lock (bt2:make-lock))
-             (cvar (bt2:make-condition-variable))
-             (tool-actor nil))
+             (cvar (bt2:make-condition-variable)))
          (let ((tool (make-bash "echo hello")))
-           (setf tool-actor tool)
            (act:ask tool
                     (list :run
-                          :on-completion (lambda (message &key actor &allow-other-keys)
-                                           (declare (ignore message actor))
+                          :on-completion (lambda (message &key result &allow-other-keys)
+                                           (declare (ignore message))
                                            (bt2:with-lock-held (lock)
-                                             (setf callback-called t)
+                                             (setf callback-result result)
                                              (bt2:condition-broadcast cvar)))))
            (bt2:with-lock-held (lock)
-             (unless callback-called
+             (unless callback-result
                (bt2:condition-wait cvar lock :timeout 10)))
-           (testing "render-tool-result returns stdout"
-             (let* ((state (act:ask-s tool-actor :get-state))
-                    (result (render-tool-result state)))
-               (ok (search "hello" result))))))
+            (testing "render-tool-result returns stdout"
+              (ok (search "hello" callback-result)))))
     (stop-actor-system)
     (values)))
