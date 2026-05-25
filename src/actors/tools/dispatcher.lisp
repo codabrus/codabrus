@@ -26,7 +26,10 @@
               :accessor tools-dispatcher-completed)
    (on-completion :type callback-type
                   :initform nil
-                  :accessor tools-dispatcher-on-completion)))
+                  :accessor tools-dispatcher-on-completion)
+   (results :type list
+            :initform nil
+            :accessor tools-dispatcher-results)))
 
 
 (defmethod print-object ((obj tools-dispatcher) stream)
@@ -52,6 +55,7 @@
      (setf (tools-dispatcher-status obj) :busy
            (tools-dispatcher-pending obj) nil
            (tools-dispatcher-completed obj) nil
+           (tools-dispatcher-results obj) nil
            (tools-dispatcher-on-completion obj) on-completion)
      (loop for spec in tool-specs
            for constructor = (first spec)
@@ -65,10 +69,10 @@
      (values))))
 
 
-(defmethod process-message ((obj tools-dispatcher) (message (eql :completed)) &key actor)
+(defmethod process-message ((obj tools-dispatcher) (message (eql :completed)) &key actor result)
   (setf (tools-dispatcher-pending obj)
         (remove actor (tools-dispatcher-pending obj)))
-  (push actor (tools-dispatcher-completed obj))
+  (push (cons actor result) (tools-dispatcher-completed obj))
   (when (null (tools-dispatcher-pending obj))
     (%finish-round obj)))
 

@@ -18,6 +18,8 @@
                 #:get-single-completion)
   (:import-from #:40ants-ai-agents/utils
                 #:json-parse)
+  (:import-from #:log4cl-extras/error
+                #:with-log-unhandled)
   (:export #:make-llm-agent))
 (in-package #:codabrus/actors/llm-agent)
 
@@ -88,13 +90,14 @@
       (sento.tasks:task-async
        (lambda ()
          (handler-case
-             (multiple-value-bind (type data updated-messages)
-                 (get-single-completion provider api-messages)
-               (act:ask caller
-                        (list :on-llm-response
-                              :type type
-                              :data data
-                              :messages updated-messages)))
+             (with-log-unhandled ()
+               (multiple-value-bind (type data updated-messages)
+                   (get-single-completion provider api-messages)
+                 (act:ask caller
+                          (list :on-llm-response
+                                :type type
+                                :data data
+                                :messages updated-messages))))
            (error (e)
              (log:error "LLM call failed" e)
              (act:ask caller
@@ -168,9 +171,8 @@
     (return-from process-message))
   (let ((call-id-map (llm-agent-call-id-map obj))
         (tool-answers nil))
-    (loop for tool-actor in tools
+    (loop for (tool-actor . result) in tools
           for (call-id . tool-name) = (gethash tool-actor call-id-map)
-          for result = (render-tool-result (act:ask-s tool-actor :get-state))
           do (push (serapeum:dict "role" "tool"
                                   "tool_call_id" call-id
                                   "content" result)
