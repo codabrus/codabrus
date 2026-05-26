@@ -42,8 +42,6 @@
                   :accessor llm-agent-on-completion)
    (dispatcher :initform nil
                :accessor llm-agent-dispatcher)
-   (call-id-map :initform nil
-                :accessor llm-agent-call-id-map)
    (tool-calls-data :type list
                     :initform nil
                     :accessor llm-agent-tool-calls-data)
@@ -137,7 +135,7 @@
 
 (defun %dispatch-tool-calls (obj tool-calls messages)
   (let ((tool-specs nil)
-        (call-id-map (make-hash-table :test 'eq))
+        (call-ids nil)
         (registry (llm-agent-tool-registry obj)))
     (loop for tc in tool-calls
           for call-id = (gethash "id" tc)
@@ -146,20 +144,18 @@
           for raw-args = (gethash "arguments" func)
           for args = (json-parse raw-args)
           for factory = (gethash (string-downcase fn-name) registry)
-          do (let* ((spec (funcall factory args))
-                    (actor (apply (first spec) (rest spec))))
-               (setf (gethash actor call-id-map)
-                     (cons call-id fn-name))
+          do (let ((spec (funcall factory args)))
+               (push call-id call-ids)
                (push spec tool-specs)))
     (setf (llm-agent-messages obj) messages
-          (llm-agent-call-id-map obj) call-id-map
           (llm-agent-tool-calls-data obj) tool-calls
           (llm-agent-status obj) :waiting-for-tools)
     (let ((dispatcher (make-tools-dispatcher)))
       (setf (llm-agent-dispatcher obj) dispatcher)
       (act:ask dispatcher
                (list :run
-                     :tool-specs tool-specs
+                     :tool-specs (nreverse tool-specs)
+                     :call-ids (nreverse call-ids)
                      :on-completion act:*self*)))))
 
 
@@ -169,25 +165,18 @@
   (when (llm-agent-interrupted obj)
     (%handle-interrupted obj)
     (return-from process-message))
-  (let ((call-id-map (llm-agent-call-id-map obj))
-        (tool-answers nil))
-    (loop for (tool-actor . result) in tools
-          for (call-id . tool-name) = (gethash tool-actor call-id-map)
+  (let ((tool-answers nil))
+    (loop for (call-id . result) in tools
           do (push (serapeum:dict "role" "tool"
                                   "tool_call_id" call-id
                                   "content" result)
                    tool-answers))
-    (let ((assistant-msg (serapeum:dict "role" "assistant"
-                                        "content" :null
-                                        "tool_calls" (coerce (llm-agent-tool-calls-data obj) 'vector))))
-      (setf (llm-agent-messages obj)
-            (append (llm-agent-messages obj)
-                    (list assistant-msg)
-                    (nreverse tool-answers))
-            (llm-agent-call-id-map obj) nil
-            (llm-agent-tool-calls-data obj) nil
-            (llm-agent-dispatcher obj) nil)
-      (act:tell act:*self* :next-iteration))))
+    (setf (llm-agent-messages obj)
+          (append (llm-agent-messages obj)
+                  (nreverse tool-answers))
+          (llm-agent-tool-calls-data obj) nil
+          (llm-agent-dispatcher obj) nil)
+    (act:tell act:*self* :next-iteration)))
 
 
 (defmethod process-message ((obj llm-agent) (message (eql :interrupted))
@@ -216,7 +205,6 @@
     (setf (llm-agent-status obj) :free
           (llm-agent-on-completion obj) nil
           (llm-agent-messages obj) nil
-          (llm-agent-call-id-map obj) nil
           (llm-agent-tool-calls-data obj) nil
           (llm-agent-dispatcher obj) nil
           (llm-agent-interrupted obj) nil)

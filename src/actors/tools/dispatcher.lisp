@@ -29,7 +29,9 @@
                   :accessor tools-dispatcher-on-completion)
    (results :type list
             :initform nil
-            :accessor tools-dispatcher-results)))
+            :accessor tools-dispatcher-results)
+   (call-id-map :initform nil
+                :accessor tools-dispatcher-call-id-map)))
 
 
 (defmethod print-object ((obj tools-dispatcher) stream)
@@ -46,27 +48,31 @@
   (make-clos-actor 'tools-dispatcher))
 
 
-(defmethod process-message ((obj tools-dispatcher) (message (eql :run)) &key tool-specs on-completion)
+(defmethod process-message ((obj tools-dispatcher) (message (eql :run)) &key tool-specs call-ids on-completion)
   (cond
     ((eq (tools-dispatcher-status obj) :busy)
      (stash *message*)
      :stashed)
     (t
-     (setf (tools-dispatcher-status obj) :busy
-           (tools-dispatcher-pending obj) nil
-           (tools-dispatcher-completed obj) nil
-           (tools-dispatcher-results obj) nil
-           (tools-dispatcher-on-completion obj) on-completion)
-     (loop for spec in tool-specs
-           for constructor = (first spec)
-           for args = (rest spec)
-           for actor = (apply constructor args)
-           do (push actor (tools-dispatcher-pending obj))
-              (act:ask actor (list :run :on-completion act:*self*)))
-     (when (null tool-specs)
-       (log:info "No tools to dispatch")
-       (%finish-round obj))
-     (values))))
+     (let ((cid-map (make-hash-table :test 'eq)))
+       (setf (tools-dispatcher-status obj) :busy
+             (tools-dispatcher-pending obj) nil
+             (tools-dispatcher-completed obj) nil
+             (tools-dispatcher-results obj) nil
+             (tools-dispatcher-call-id-map obj) cid-map
+             (tools-dispatcher-on-completion obj) on-completion)
+       (loop for spec in tool-specs
+             for call-id in call-ids
+             for constructor = (first spec)
+             for args = (rest spec)
+             for actor = (apply constructor args)
+             do (setf (gethash actor cid-map) call-id)
+                (push actor (tools-dispatcher-pending obj))
+                (act:ask actor (list :run :on-completion act:*self*)))
+       (when (null tool-specs)
+         (log:info "No tools to dispatch")
+         (%finish-round obj))
+       (values)))))
 
 
 (defmethod process-message ((obj tools-dispatcher) (message (eql :completed)) &key actor result)
@@ -80,13 +86,16 @@
 (defun %finish-round (obj)
   (log:info "All tools completed"
             (length (tools-dispatcher-completed obj)))
-  (when (tools-dispatcher-on-completion obj)
-    (call-callback (tools-dispatcher-on-completion obj)
-                   :completed
-                   :actor act:*self*
-                   :tools (tools-dispatcher-completed obj)))
-  (setf (tools-dispatcher-status obj) :free)
-  (unstash-all))
+  (let ((results (loop for (actor . result) in (tools-dispatcher-completed obj)
+                       for call-id = (gethash actor (tools-dispatcher-call-id-map obj))
+                       collect (cons call-id result))))
+    (when (tools-dispatcher-on-completion obj)
+      (call-callback (tools-dispatcher-on-completion obj)
+                     :completed
+                     :actor act:*self*
+                     :tools results))
+    (setf (tools-dispatcher-status obj) :free)
+    (unstash-all)))
 
 
 (defmethod process-message ((obj tools-dispatcher) (message (eql :interrupt)) &key)

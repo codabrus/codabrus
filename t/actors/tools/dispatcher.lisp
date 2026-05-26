@@ -21,17 +21,18 @@
              (callback-lock (bt2:make-lock))
              (callback-cvar (bt2:make-condition-variable))
              (callback-result nil))
-         (let ((dispatcher (make-tools-dispatcher)))
-           (act:ask dispatcher
-                    (list :run
-                          :tool-specs (list (list 'make-bash "echo hello")
-                                            (list 'make-bash "echo world"))
-                          :on-completion (lambda (message &key actor tools &allow-other-keys)
-                                           (declare (ignore actor))
-                                           (bt2:with-lock-held (callback-lock)
-                                             (setf callback-called t
-                                                   callback-result (list message tools))
-                                             (bt2:condition-broadcast callback-cvar)))))
+          (let ((dispatcher (make-tools-dispatcher)))
+            (act:ask dispatcher
+                     (list :run
+                           :tool-specs (list (list 'make-bash "echo hello")
+                                             (list 'make-bash "echo world"))
+                           :call-ids (list "call-1" "call-2")
+                           :on-completion (lambda (message &key actor tools &allow-other-keys)
+                                            (declare (ignore actor))
+                                            (bt2:with-lock-held (callback-lock)
+                                              (setf callback-called t
+                                                    callback-result (list message tools))
+                                              (bt2:condition-broadcast callback-cvar)))))
            ;; Waiting when callback will be called
            (bt2:with-lock-held (callback-lock)
              (unless callback-called
@@ -65,29 +66,31 @@
                (all-tools nil)
                (lock (bt2:make-lock))
                (cvar (bt2:make-condition-variable)))
-           (let ((dispatcher (make-tools-dispatcher)))
-             (act:ask dispatcher
-                      (list :run
-                            :tool-specs (list (list 'make-bash
-                                                    (format nil "sleep 1 && echo Some > ~A"
-                                                            (namestring tmpfile))))
-                            :on-completion (lambda (message &key tools &allow-other-keys)
-                                             (declare (ignore message))
-                                             (bt2:with-lock-held (lock)
-                                               (incf rounds-completed)
-                                               (setf all-tools (append all-tools tools))
-                                               (bt2:condition-broadcast cvar)))))
-             (act:ask dispatcher
-                      (list :run
-                            :tool-specs (list (list 'make-bash
-                                                    (format nil "cat ~A"
-                                                            (namestring tmpfile))))
-                            :on-completion (lambda (message &key tools &allow-other-keys)
-                                             (declare (ignore message))
-                                             (bt2:with-lock-held (lock)
-                                               (incf rounds-completed)
-                                               (setf all-tools (append all-tools tools))
-                                               (bt2:condition-broadcast cvar)))))
+            (let ((dispatcher (make-tools-dispatcher)))
+              (act:ask dispatcher
+                       (list :run
+                             :tool-specs (list (list 'make-bash
+                                                     (format nil "sleep 1 && echo Some > ~A"
+                                                             (namestring tmpfile))))
+                             :call-ids (list "call-1")
+                             :on-completion (lambda (message &key tools &allow-other-keys)
+                                              (declare (ignore message))
+                                              (bt2:with-lock-held (lock)
+                                                (incf rounds-completed)
+                                                (setf all-tools (append all-tools tools))
+                                                (bt2:condition-broadcast cvar)))))
+              (act:ask dispatcher
+                       (list :run
+                             :tool-specs (list (list 'make-bash
+                                                     (format nil "cat ~A"
+                                                             (namestring tmpfile))))
+                             :call-ids (list "call-2")
+                             :on-completion (lambda (message &key tools &allow-other-keys)
+                                              (declare (ignore message))
+                                              (bt2:with-lock-held (lock)
+                                                (incf rounds-completed)
+                                                (setf all-tools (append all-tools tools))
+                                                (bt2:condition-broadcast cvar)))))
              
              ;; Wait while both :runs will complete
              (bt2:with-lock-held (lock)
@@ -112,12 +115,13 @@
              (callback-result nil)
              (lock (bt2:make-lock))
              (cvar (bt2:make-condition-variable)))
-         (let ((dispatcher (make-tools-dispatcher)))
-           (act:ask dispatcher
-                    (list :run
-                          :tool-specs (list (list 'make-bash "sleep 30")
-                                            (list 'make-bash "sleep 30"))
-                          :on-completion (lambda (message &key actor &allow-other-keys)
+          (let ((dispatcher (make-tools-dispatcher)))
+            (act:ask dispatcher
+                     (list :run
+                           :tool-specs (list (list 'make-bash "sleep 30")
+                                             (list 'make-bash "sleep 30"))
+                           :call-ids (list "call-1" "call-2")
+                           :on-completion (lambda (message &key actor &allow-other-keys)
                                            (declare (ignore actor))
                                            (bt2:with-lock-held (lock)
                                              (setf callback-called t
