@@ -9,7 +9,7 @@ export default defineConfig({
       entry: './diagram.js',
       name: 'Diagram',
       fileName: () => 'diagram.js',
-      formats: ['es']
+      formats: ['iife']
     }
   }
 })

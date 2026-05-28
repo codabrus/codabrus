@@ -9,6 +9,8 @@
                 #:tailwind-theme)
   (:import-from #:reblocks/html
                 #:with-html)
+  (:import-from #:codabrus/frontend/widgets/x6-diagram
+                #:make-x6-diagram)
   (:export #:make-main-page))
 (in-package #:codabrus/frontend/pages/main)
 
@@ -27,4 +29,6 @@
           (:h1 :class "text-6xl font-bold"
                "Codabrus")
           (:p :class "mt-4 text-xl text-gray-600"
-              "Hackable AI Code Assistant"))))
+              "Hackable AI Code Assistant")
+          (:div :class "mt-8 w-full max-w-2xl"
+                (render (make-x6-diagram) theme)))))

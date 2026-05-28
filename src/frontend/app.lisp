@@ -22,8 +22,9 @@
    (lambda ()
      (with-html ()
        (:div :class "flex flex-col gap-8 mx-auto max-w-4xl px-4 my-8"
-             (:header :class "text-2xl font-bold"
-                      "Codabrus")
+             ;; For a while we don't need a header
+             ;; (:header :class "text-2xl font-bold"
+             ;;          "Codabrus")
              (:div (render content)))))))
 
 

@@ -1,6 +1,6 @@
 import { Graph } from '@antv/x6'
 
-export default function initDiagram(containerId, data) {
+function initDiagram(containerId, data) {
   const container = document.getElementById(containerId)
   if (!container) throw new Error(`Container not found: ${containerId}`)
 
@@ -22,3 +22,6 @@ export default function initDiagram(containerId, data) {
 
   return graph
 }
+
+window.initDiagram = initDiagram
+export default initDiagram
