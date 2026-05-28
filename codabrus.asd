@@ -12,7 +12,9 @@
   :depends-on ("codabrus/core"
                "codabrus/actors/tools/dispatcher"
                "codabrus/actors/tools/bash"
-               "codabrus/actors/llm-agent")
+               "codabrus/actors/llm-agent"
+               "reblocks"
+               "codabrus/frontend/server")
   :in-order-to ((test-op (test-op "codabrus-tests"))))
 
 

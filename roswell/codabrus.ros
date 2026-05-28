@@ -38,8 +38,9 @@ exec ros -Q -- $0 "$@"
                   "codabrus/cli/new"
                   "codabrus/cli/resume"
                   "codabrus/cli/ls"
-                  "codabrus/cli/serve")
-                :silent t)
+                  "codabrus/cli/serve"
+                  "codabrus/cli/web")
+                 :silent t)
   (sb-ext:gc :full t))
 
 
