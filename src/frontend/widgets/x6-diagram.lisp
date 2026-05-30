@@ -16,9 +16,6 @@
                 #:dom-id)
   (:import-from #:reblocks/actions
                 #:make-js-action)
-  (:import-from #:parenscript
-                #:ps
-                #:chain)
   (:import-from #:codabrus/frontend/widgets/message-popup
                 #:message-popup
                 #:make-message-popup
@@ -45,44 +42,35 @@
   (make-js-action
    (lambda (&key node-id &allow-other-keys)
      (show-node-popup popup-widget node-id))
-   :args (serapeum:dict "node-id" '(ps:chain event node id))))
+   :args (serapeum:dict "node-id" '(ps:chain node-id))))
 
 
 (defun %make-init-js (container-id popup-widget)
   (let ((on-node-click-js (%make-on-node-click-js popup-widget)))
-    (ps:ps
-      (let ((container (ps:chain document (get-element-by-id (ps:lisp container-id)))))
-        (when (and container
-                   (typeof (ps:@ window init-diagram)))
-          (let ((graph (ps:chain window (init-diagram (ps:lisp container-id)
-                                                       (ps:create)))))
-            (setf (ps:@ window codabrus-graph) graph)
-            (ps:chain graph (on "node:click"
-                                (lambda (args)
-                                  (let ((event (ps:@ args e))
-                                        (node (ps:@ args node)))
-                                    (ps:lisp on-node-click-js)))))
-            (let ((es (ps:new (-event-source "/diagram-events"))))
-              (ps:chain es
-                        (add-event-listener "init-diagram"
-                                            (lambda (event)
-                                              (let ((data (ps:chain -j-s-o-n (parse (ps:@ event data)))))
-                                                (when graph
-                                                  (ps:chain graph (clear-cells))
-                                                  (let ((nodes (ps:@ data nodes)))
-                                                    (ps:chain nodes
-                                                              (for-each
-                                                               (lambda (n)
-                                                                 (ps:chain graph (add-node n))))))
-                                                  (let ((edges (ps:@ data edges)))
-                                                    (ps:chain edges
-                                                              (for-each
-                                                               (lambda (e)
-                                                                 (ps:chain graph (add-edge e)))))))))))
-              (ps:chain es
-                        (add-event-listener "error"
-                                            (lambda ()
-                                              (ps:chain console (log "SSE connection error"))))))))))))
+    (format nil "(function() {
+  var container = document.getElementById('~A');
+  if (container && typeof window.initDiagram !== 'undefined') {
+    var graph = window.initDiagram('~A', {});
+    window.codabrusGraph = graph;
+    graph.on('node:click', function(args) {
+      var nodeId = args.node.id;
+      ~A
+    });
+    var es = new EventSource('/diagram-events');
+    es.addEventListener('init-diagram', function(event) {
+      var data = JSON.parse(event.data);
+      if (graph) {
+        graph.clearCells();
+        data.nodes.forEach(function(n) { graph.addNode(n); });
+        data.edges.forEach(function(e) { graph.addEdge(e); });
+      }
+    });
+    es.addEventListener('error', function() {
+      console.log('SSE connection error');
+    });
+  }
+})();"
+            container-id container-id on-node-click-js)))
 
 
 (defmethod render ((widget x6-diagram) (theme tailwind-theme))
