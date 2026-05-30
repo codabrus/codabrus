@@ -79,11 +79,15 @@
 
 (defmethod process-message ((obj llm-agent) (message (eql :next-iteration)) &key)
   (setf (llm-agent-status obj) :waiting-for-llm)
-  (let ((provider (llm-agent-provider obj))
-        (api-messages (append (list (serapeum:dict "role" "system"
-                                                   "content" (llm-agent-system-prompt obj)))
-                              (llm-agent-messages obj)))
-        (caller act:*self*))
+  (let* ((provider (llm-agent-provider obj))
+         (raw-messages (llm-agent-messages obj))
+         (has-system (and raw-messages (string= "system" (gethash "role" (first raw-messages)))))
+         (api-messages (if has-system
+                           raw-messages
+                           (append (list (serapeum:dict "role" "system"
+                                                        "content" (llm-agent-system-prompt obj)))
+                                   raw-messages)))
+         (caller act:*self*))
     (tasks:with-context (act:*self*)
       (sento.tasks:task-async
        (lambda ()
