@@ -9,6 +9,11 @@
   (:import-from #:clack-sse
                 #:serve-sse)
   (:import-from #:log)
+  (:import-from #:codabrus/frontend/diagram/builder
+                #:*current-session-actor*
+                #:messages-of-actor
+                #:build-diagram-data
+                #:diagram-to-json)
   (:export #:diagram-sse-route))
 (in-package #:codabrus/frontend/routes)
 
@@ -20,18 +25,19 @@
 (defun diagram-events-stream (env output-stream)
   (declare (ignore env))
   (log:info "SSE client connected to diagram-events")
-  (loop with counter = 2
-        with last-id = "n2"
-        for new-id = (format nil "n~A" (incf counter))
-        for x = (+ 80 (random 400))
-        for y = (+ 80 (random 300))
-        do (sleep 5)
-           (let ((payload (format nil "{\"id\":\"~A\",\"x\":~D,\"y\":~D,\"width\":100,\"height\":40,\"label\":\"Block ~A\",\"source\":\"~A\"}"
-                                  new-id x y counter last-id)))
-             (format output-stream "event: add-node~%data: ~A~%~%" payload)
-             (finish-output output-stream)
-             (log:info "Sent SSE add-node event: ~A" new-id))
-           (setf last-id new-id)))
+  (let ((last-msg-count -1))
+    (loop
+      (let* ((actor *current-session-actor*)
+             (messages (messages-of-actor actor))
+             (msg-count (length messages)))
+        (when (/= msg-count last-msg-count)
+          (let* ((data (build-diagram-data messages))
+                 (json (diagram-to-json data)))
+            (format output-stream "event: init-diagram~%data: ~A~%~%" json)
+            (finish-output output-stream)
+            (log:info "Sent SSE init-diagram event with ~A messages" msg-count))
+          (setf last-msg-count msg-count)))
+      (sleep 1))))
 
 
 (defmethod serve ((route diagram-sse-route) env)

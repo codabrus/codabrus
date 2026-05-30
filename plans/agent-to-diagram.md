@@ -166,31 +166,32 @@ For incremental updates. Not used in v1.
 
 ## TODO
 
-- [ ] Create `src/frontend/diagram/builder.lisp`
-  - [ ] `*current-session-actor*` global variable
-  - [ ] `*node-data*` hash-table for popup lookups
-  - [ ] `truncate-string` helper
-  - [ ] `node-attrs` helper (color scheme per role)
-  - [ ] `messages-of-actor` (extract messages from actor state)
-  - [ ] `build-diagram-data` (main algorithm)
-  - [ ] `get-node-data` (lookup for popup)
-  - [ ] Serialization to JSON (`nodes/to-json`)
-- [ ] Create `src/frontend/widgets/message-popup.lisp`
-  - [ ] `message-popup` class (inherits `popup-widget`)
-  - [ ] `render-popup-content` method (role badge + content)
-  - [ ] `render` method for `tailwind-theme`
-  - [ ] `show-node-popup` function
-- [ ] Modify `src/frontend/widgets/x6-diagram.lisp`
-  - [ ] Add `popup` slot with `message-popup` instance
-  - [ ] Create Reblocks action for node clicks in `render`
-  - [ ] Update `%make-init-js` in Parenscript:
-    - [ ] Remove hardcoded Hello→World nodes
-    - [ ] Add `init-diagram` event handler (clearCells + re-render)
-    - [ ] Add `graph.on('node:click')` handler calling `initiateAction`
-  - [ ] Render popup widget alongside diagram
-- [ ] Modify `src/frontend/routes.lisp`
-  - [ ] Replace demo `diagram-events-stream` with session-aware SSE
-  - [ ] On connect: read actor, build diagram, send `init-diagram`
-  - [ ] Poll loop: detect message count changes, resend `init-diagram`
-- [ ] Verify `codabrus.asd` transitive dependency resolution
-- [ ] Test end-to-end: actor → diagram → popup
+- [x] Create `src/frontend/diagram/builder.lisp`
+  - [x] `*current-session-actor*` global variable
+  - [x] `*node-data*` hash-table for popup lookups
+  - [x] `truncate-string` helper
+  - [x] `node-attrs` helper (color scheme per role)
+  - [x] `messages-of-actor` (extract messages from actor state)
+  - [x] `build-diagram-data` (main algorithm)
+  - [x] `get-node-data` (lookup for popup)
+  - [x] Serialization to JSON (`nodes/to-json`)
+- [x] Create `src/frontend/widgets/message-popup.lisp`
+  - [x] `message-popup` class (inherits `ui-widget`)
+  - [x] `render` method with role badge + content
+  - [x] `show-node-popup` function
+  - [x] `hide-popup` function
+- [x] Modify `src/frontend/widgets/x6-diagram.lisp`
+  - [x] Add `popup` slot with `message-popup` instance
+  - [x] Create Reblocks action for node clicks in `render`
+  - [x] Update `%make-init-js` in Parenscript:
+    - [x] Remove hardcoded Hello→World nodes
+    - [x] Add `init-diagram` event handler (clearCells + re-render)
+    - [x] Add `graph.on('node:click')` handler calling `make-js-action`
+  - [x] Render popup widget alongside diagram
+- [x] Modify `src/frontend/routes.lisp`
+  - [x] Replace demo `diagram-events-stream` with session-aware SSE
+  - [x] On connect: read actor, build diagram, send `init-diagram`
+  - [x] Poll loop: detect message count changes, resend `init-diagram`
+- [x] Verify `codabrus.asd` transitive dependency resolution
+- [x] Add tests for `builder.lisp` (4 tests passing)
+- [ ] Test end-to-end: actor → diagram → popup (requires running server)
