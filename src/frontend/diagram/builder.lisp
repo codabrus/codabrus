@@ -73,6 +73,24 @@
   (gethash "name" (gethash "function" tc)))
 
 
+(defun tool-call-args (tc)
+  (gethash "arguments" (gethash "function" tc)))
+
+
+(defun format-tool-calls-summary (tool-calls)
+  (if (= (length tool-calls) 1)
+      (format nil "Call: ~A" (tool-call-name (aref tool-calls 0)))
+      (format nil "Call ~A tools" (length tool-calls))))
+
+
+(defun format-tool-calls-detail (tool-calls)
+  (with-output-to-string (s)
+    (loop for tc across tool-calls
+          for i from 1
+          do (format s "~:[~;~%~%---~]Tool ~A: ~A~%Arguments: ~A"
+                     (> i 1) i (tool-call-name tc) (tool-call-args tc)))))
+
+
 (defun build-diagram-data (messages)
   (clrhash *node-data*)
   (let ((nodes nil)
@@ -107,13 +125,19 @@
                         main-chain-x (+ main-chain-x 220))))
 
                ((string= role "assistant")
-                (let* ((node-id (format nil "m~A" i))
-                       (tool-calls (gethash "tool_calls" msg))
-                       (label (if (or (null content) (string= content "NULL"))
-                                  "..."
-                                  (truncate-string content 25))))
-                  (push (make-node node-id main-chain-x 100 label :assistant 180 40) nodes)
-                  (store-node-data node-id :assistant content)
+                 (let* ((node-id (format nil "m~A" i))
+                        (tool-calls (gethash "tool_calls" msg))
+                        (has-content (and content (string/= content "NULL")))
+                        (label (cond
+                                 (has-content (truncate-string content 25))
+                                 (tool-calls (format-tool-calls-summary tool-calls))
+                                 (t "...")))
+                        (popup-content (cond
+                                         (has-content content)
+                                         (tool-calls (format-tool-calls-detail tool-calls))
+                                         (t ""))))
+                   (push (make-node node-id main-chain-x 100 label :assistant 180 40) nodes)
+                   (store-node-data node-id :assistant popup-content)
                   (when prev-main-node-id
                     (push (make-edge prev-main-node-id node-id) edges))
                   (when tool-calls
