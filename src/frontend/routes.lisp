@@ -9,9 +9,10 @@
   (:import-from #:clack-sse
                 #:serve-sse)
   (:import-from #:log)
-  (:import-from #:codabrus/frontend/diagram/builder
+  (:import-from #:codabrus/frontend/diagram/session
                 #:*current-session-actor*
-                #:messages-of-actor
+                #:get-session-messages)
+  (:import-from #:codabrus/frontend/diagram/builder
                 #:build-diagram-data
                 #:diagram-to-json)
   (:export #:diagram-sse-route))
@@ -27,8 +28,7 @@
   (log:info "SSE client connected to diagram-events")
   (let ((last-msg-count -1))
     (loop
-      (let* ((actor *current-session-actor*)
-             (messages (messages-of-actor actor))
+      (let* ((messages (get-session-messages))
              (msg-count (length messages)))
         (when (/= msg-count last-msg-count)
           (let* ((data (build-diagram-data messages))

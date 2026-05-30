@@ -6,16 +6,13 @@
   (:import-from #:yason)
   (:import-from #:codabrus/actors/llm-agent
                 #:llm-agent-messages)
-  (:export #:*current-session-actor*
-           #:*node-data*
+  (:export #:*node-data*
            #:build-diagram-data
            #:get-node-data
            #:diagram-to-json
            #:truncate-string))
 (in-package #:codabrus/frontend/diagram/builder)
 
-
-(defvar *current-session-actor* nil)
 
 (defvar *node-data* (make-hash-table :test 'equal))
 
@@ -70,12 +67,6 @@
 
 (defun get-node-data (node-id)
   (gethash node-id *node-data*))
-
-
-(defun messages-of-actor (actor)
-  (when actor
-    (let ((state (slot-value actor 'sento.actor-cell:state)))
-      (llm-agent-messages state))))
 
 
 (defun tool-call-name (tc)

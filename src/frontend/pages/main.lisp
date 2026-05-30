@@ -11,12 +11,17 @@
                 #:with-html)
   (:import-from #:codabrus/frontend/widgets/x6-diagram
                 #:make-x6-diagram)
+  (:import-from #:codabrus/frontend/widgets/prompt-input
+                #:make-prompt-input)
   (:export #:make-main-page))
 (in-package #:codabrus/frontend/pages/main)
 
 
 (defwidget main-page (ui-widget)
-  ())
+  ((diagram :initform (make-x6-diagram)
+            :reader main-page-diagram)
+   (prompt :initform (make-prompt-input)
+           :reader main-page-prompt)))
 
 
 (defun make-main-page ()
@@ -25,10 +30,8 @@
 
 (defmethod render ((widget main-page) (theme tailwind-theme))
   (with-html ()
-    (:div :class "flex flex-col items-center justify-center min-h-screen"
-          (:h1 :class "text-6xl font-bold"
-               "Codabrus")
-          (:p :class "mt-4 text-xl text-gray-600"
-              "Hackable AI Code Assistant")
-          (:div :class "mt-8 w-full"
-                (render (make-x6-diagram) theme)))))
+    (:div :class "flex flex-col h-screen"
+          (:div :class "flex-1 overflow-auto"
+                (render (main-page-diagram widget) theme))
+          (:div :class "border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800"
+                (render (main-page-prompt widget) theme)))))
