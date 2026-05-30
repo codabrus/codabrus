@@ -107,7 +107,7 @@
                ((string= role "system")
                 (let ((node-id (format nil "m~A" i))
                       (label (truncate-string content 20)))
-                  (push (make-node node-id main-chain-x 100 label :system 140 30) nodes)
+                  (push (make-node node-id main-chain-x 100 label :system 180 40) nodes)
                   (store-node-data node-id :system content)
                   (when prev-main-node-id
                     (push (make-edge prev-main-node-id node-id) edges))
