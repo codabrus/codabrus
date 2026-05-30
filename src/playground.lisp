@@ -353,4 +353,5 @@
           (unless success
             (log:error "Request timed out.")))))
     (log:info "LLM agent result: ~A" result)
-    result))
+    (values result
+            agent)))
