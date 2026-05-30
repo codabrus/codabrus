@@ -10,8 +10,12 @@
                 #:with-html)
   (:import-from #:reblocks/widget
                 #:render)
+  (:shadowing-import-from #:40ants-routes/defroutes
+                          #:get)
   (:import-from #:codabrus/frontend/pages/main
                 #:make-main-page)
+  (:import-from #:codabrus/frontend/routes
+                #:diagram-sse-route)
   (:export #:app))
 (in-package #:codabrus/frontend/app)
 
@@ -22,9 +26,6 @@
    (lambda ()
      (with-html ()
        (:div :class "flex flex-col gap-8 mx-auto max-w-4xl px-4 my-8"
-             ;; For a while we don't need a header
-             ;; (:header :class "text-2xl font-bold"
-             ;;          "Codabrus")
              (:div (render content)))))))
 
 
@@ -33,5 +34,7 @@
   :routes
   ((page ("/" :name "index"
               :title "Codabrus")
-     (make-main-page)))
+     (make-main-page))
+   (get ("/diagram-events" :name "diagram-events"
+                           :route-class diagram-sse-route)))
   :page-constructor #'make-page-frame)

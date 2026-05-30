@@ -83,6 +83,81 @@ Each UI adapter subscribes to session events via the event bus and sends user me
 - **Web UI** — Reblocks server-side components; sessions map to browser tabs
 - **ACP** — Agent Client Protocol server; allows IDE plugins to drive sessions
 
+### Web UI (Reblocks)
+
+The Web UI is a Reblocks application defined in `src/frontend/`. It uses the new-style Reblocks API with `reblocks-ui2` widgets, Tailwind CSS themes, and `40ants-routes` routing.
+
+#### File structure
+
+```
+src/frontend/
+  app.lisp              — defapp with routes (page routes + SSE routes)
+  server.lisp           — start/stop functions
+  routes.lisp           — custom route classes (SSE streaming)
+  pages/
+    main.lisp           — main page widget
+  widgets/
+    x6-diagram.lisp     — X6 diagram widget with SSE client
+  x6/                   — AntV X6 JS library (Vite/IIFE build)
+```
+
+#### Server-Sent Events (SSE) for live updates
+
+The Web UI uses SSE to push real-time updates from the server to the browser. This is how the X6 diagram widget receives new nodes without page reloads.
+
+**How it works:**
+
+```
+Browser                              Server
+  │                                    │
+  │─── GET / ─────────────────────────>│  Reblocks page route
+  │<── HTML + diagram.js ─────────────│  Widget render + dependencies
+  │                                    │
+  │─── EventSource /diagram-events ──>│  SSE route (diagram-sse-route)
+  │                                    │  clack-sse:serve-sse opens stream
+  │<══ event: add-node ═══════════════│  Server loop sends events every 5s
+  │    {id, x, y, label, source}      │
+  │                                    │
+  │  JS: graph.addNode(data)           │
+  │  JS: graph.addEdge(source,target)  │
+```
+
+**Server side** (`src/frontend/routes.lisp`):
+
+1. A custom route class `diagram-sse-route` inherits from `40ants-routes/route:route`.
+2. `reblocks/routes:serve` is specialized on this class to return `(clack-sse:serve-sse 'handler)`.
+3. `clack-sse:serve-sse` returns a Clack async response function that opens a `text/event-stream` connection.
+4. The stream handler loops, writing SSE-formatted events (`event: add-node\ndata: {...}\n\n`) and flushing output.
+5. The handler runs inside the Clack worker thread for the duration of the connection.
+
+**Client side** (`src/frontend/widgets/x6-diagram.lisp`):
+
+1. The widget's `get-dependencies` serves the X6 IIFE bundle as a local JS dependency.
+2. The `render` method outputs a container `<div>` and an inline `<script>` that:
+   - Initializes the X6 graph via `initDiagram()` and stores it as `window.codabrusGraph`.
+   - Creates an `EventSource` connected to `/diagram-events`.
+   - Listens for `add-node` events, parses JSON data, and calls `graph.addNode()` / `graph.addEdge()` on the X6 graph instance.
+
+**SSE event format:**
+
+```
+event: add-node
+data: {"id":"n3","x":280,"y":120,"width":100,"height":40,"label":"Block 3","source":"n2"}
+
+```
+
+The `source` field links the new node to a previous node with an edge. If `source` is present, the client creates an edge `{source: data.source, target: data.id}`.
+
+**Key libraries:**
+
+| Library | Purpose |
+|---------|---------|
+| `reblocks` | Web framework (new-style API with defapp routes, page-constructor) |
+| `reblocks-ui2` | Widget system with themed rendering (Tailwind) |
+| `40ants-routes` | Routing with `defroutes`, `get`, `page`, custom route classes |
+| `clack-sse` | SSE streaming for Clack (returns async response function) |
+| `AntV X6` | JavaScript diagram library (bundled as IIFE via Vite) |
+
 ### Session Manager
 
 A top-level Sento actor that owns the registry of active sessions. Responsibilities:
@@ -321,3 +396,4 @@ The calling actor passes its callback as `:on-completion` to the `:run` message.
 | [0003](adr/0003-memory-as-markdown-files.md) | Memory stored as Markdown files with SQLite index | Proposed |
 | [0004](adr/0004-mcp-tool-integration.md) | MCP protocol for tool ecosystem integration | Proposed |
 | [0005](adr/0005-permission-layer.md) | Multi-level permission system for tool execution | Proposed |
+| [0008](adr/0008-reblocks-web-ui.md) | Reblocks Web UI with SSE for live updates | Proposed |
