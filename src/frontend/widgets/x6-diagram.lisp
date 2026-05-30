@@ -48,29 +48,32 @@
 (defun %make-init-js (container-id popup-widget)
   (let ((on-node-click-js (%make-on-node-click-js popup-widget)))
     (format nil "(function() {
-  var container = document.getElementById('~A');
-  if (container && typeof window.initDiagram !== 'undefined') {
-    var graph = window.initDiagram('~A', {});
-    window.codabrusGraph = graph;
-    graph.on('node:click', function(args) {
+  var containerId = '~A';
+  var container = document.getElementById(containerId);
+  if (!container || typeof window.initDiagram === 'undefined') return;
+  var graph = window.initDiagram(containerId, {});
+  window.codabrusGraph = graph;
+  function registerClick(g) {
+    g.on('node:click', function(args) {
       var nodeId = args.node.id;
       ~A
     });
-    var es = new EventSource('/diagram-events');
-    es.addEventListener('init-diagram', function(event) {
-      var data = JSON.parse(event.data);
-      if (graph) {
-        graph.clearCells();
-        data.nodes.forEach(function(n) { graph.addNode(n); });
-        data.edges.forEach(function(e) { graph.addEdge(e); });
-      }
-    });
-    es.addEventListener('error', function() {
-      console.log('SSE connection error');
-    });
   }
+  registerClick(graph);
+  if (window._codabrusES) { window._codabrusES.close(); }
+  var es = new EventSource('/diagram-events');
+  window._codabrusES = es;
+  es.addEventListener('init-diagram', function(event) {
+    var data = JSON.parse(event.data);
+    graph = window.resetDiagram(containerId, graph, data);
+    window.codabrusGraph = graph;
+    registerClick(graph);
+  });
+  es.addEventListener('error', function() {
+    console.log('SSE connection error');
+  });
 })();"
-            container-id container-id on-node-click-js)))
+            container-id on-node-click-js)))
 
 
 (defmethod render ((widget x6-diagram) (theme tailwind-theme))

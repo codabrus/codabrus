@@ -23,5 +23,13 @@ function initDiagram(containerId, data) {
   return graph
 }
 
+function resetDiagram(containerId, graph, data) {
+  if (graph) {
+    graph.dispose()
+  }
+  return initDiagram(containerId, data)
+}
+
 window.initDiagram = initDiagram
+window.resetDiagram = resetDiagram
 export default initDiagram
