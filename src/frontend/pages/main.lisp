@@ -30,5 +30,5 @@
                "Codabrus")
           (:p :class "mt-4 text-xl text-gray-600"
               "Hackable AI Code Assistant")
-          (:div :class "mt-8 w-full max-w-2xl"
+          (:div :class "mt-8 w-full"
                 (render (make-x6-diagram) theme)))))

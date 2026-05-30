@@ -25,7 +25,7 @@
   (make-funcall-widget
    (lambda ()
      (with-html ()
-       (:div :class "flex flex-col gap-8 mx-auto max-w-4xl px-4 my-8"
+       (:div :class "flex flex-col gap-8 mx-auto max-full px-4 my-8"
              (:div (render content)))))))
 
 

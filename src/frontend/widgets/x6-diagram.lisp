@@ -74,12 +74,12 @@
 
 
 (defmethod render ((widget x6-diagram) (theme tailwind-theme))
-  (let ((container-id (format nil "~A-diagram"
-                              (dom-id widget)))
+  (let ((diagram-container-id (format nil "~A-diagram"
+                                      (dom-id widget)))
         (popup (x6-diagram-popup widget)))
     (with-html ()
-      (:div :id container-id
-            :style "width: 100%; height: 600px;")
+      (:div :id diagram-container-id
+            :style "width: 100%; height: 600px; background: black;")
       (render popup theme)
       (:script :type "text/javascript"
-               (:raw (%make-init-js container-id popup))))))
+               (:raw (%make-init-js diagram-container-id popup))))))
