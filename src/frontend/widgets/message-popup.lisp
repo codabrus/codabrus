@@ -56,24 +56,26 @@
 
 
 (defmethod render ((widget message-popup) (theme tailwind-theme))
-  (when (popup-visible-p widget)
-    (let* ((data (popup-node-data widget))
-           (role (gethash "role" data))
-           (content (gethash "content" data))
-           (hide-js (make-js-action (lambda (&key &allow-other-keys)
-                                      (hide-popup widget)))))
+  (if (popup-visible-p widget)
+      (let* ((data (popup-node-data widget))
+             (role (gethash "role" data))
+             (content (gethash "content" data))
+             (hide-js (make-js-action (lambda (&key &allow-other-keys)
+                                        (hide-popup widget)))))
+        (with-html ()
+          (:div :class "fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+                :onclick hide-js
+                (:div :class "bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full p-6"
+                      :onclick "event.stopPropagation()"
+                      (:div :class "flex items-center justify-between mb-4"
+                            (:span :class (format nil "px-2 py-1 rounded text-xs text-white font-semibold ~A"
+                                                  (role-badge-class role))
+                                   (string-capitalize role))
+                            (:button :class "text-gray-500 hover:text-gray-700 text-xl font-bold"
+                                     :onclick hide-js
+                                     (:raw "&#215;")))
+                      (:div :class "overflow-auto max-h-96"
+                            (:pre :class "text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words"
+                                  (or content "")))))))
       (with-html ()
-        (:div :class "fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-              :onclick hide-js
-              (:div :class "bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full p-6"
-                    :onclick "event.stopPropagation()"
-                    (:div :class "flex items-center justify-between mb-4"
-                          (:span :class (format nil "px-2 py-1 rounded text-xs text-white font-semibold ~A"
-                                                (role-badge-class role))
-                                 (string-capitalize role))
-                          (:button :class "text-gray-500 hover:text-gray-700 text-xl font-bold"
-                                   :onclick hide-js
-                                   "&#215;"))
-                    (:div :class "overflow-auto max-h-96"
-                          (:pre :class "text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words"
-                                (or content "")))))))))
+        (:div :style "display:none"))))

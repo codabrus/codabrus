@@ -194,4 +194,12 @@ For incremental updates. Not used in v1.
   - [x] Poll loop: detect message count changes, resend `init-diagram`
 - [x] Verify `codabrus.asd` transitive dependency resolution
 - [x] Add tests for `builder.lisp` (4 tests passing)
-- [ ] Test end-to-end: actor → diagram → popup (requires running server)
+- [x] Test end-to-end: actor → diagram → popup
+
+## Deviations
+
+- `message-popup` inherits `ui-widget` (not a `popup-widget` — that class doesn't exist in reblocks)
+- `%make-init-js` uses `format` (raw JS) instead of `ps:ps` because `ps:lisp` wraps string values in quotes, breaking `make-js-action` output
+- `make-js-action` args must use Parenscript forms (e.g. `(ps:chain node-id)`) for JS variable references — plain symbols get uppercased by CL
+- Popup `render` must always emit a DOM element (hidden `<div>` when invisible) — otherwise `update` has no target to replace
+- Diagram container ID must differ from widget's `dom-id` (e.g. `"~A-diagram"`) to avoid collision with Reblocks DOM updates
