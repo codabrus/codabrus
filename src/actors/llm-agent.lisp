@@ -127,7 +127,8 @@
 (defun %finish-with-text (obj text messages)
   (let ((callback (llm-agent-on-completion obj)))
     (setf (llm-agent-status obj) :free
-          (llm-agent-on-completion obj) nil)
+          (llm-agent-on-completion obj) nil
+          (llm-agent-messages obj) messages)
     (when callback
       (call-callback callback :completed :text text :messages messages))
     (unstash-all)))
