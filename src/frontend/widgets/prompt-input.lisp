@@ -39,7 +39,7 @@
                          (reset-session)))))
     (with-html ()
       (:form :class "flex gap-2 w-full"
-             :onsubmit (format nil "~A; return false;" submit-action)
+             :onsubmit (format nil "var inp=this.querySelector('input'); setTimeout(function(){inp.value='';},0); ~A; return false;" submit-action)
              (:input :type "text"
                      :name "message"
                      :placeholder "Ask Codabrus..."
