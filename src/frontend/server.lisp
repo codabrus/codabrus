@@ -16,11 +16,20 @@
 (defvar *default-port* 8000)
 (defvar *default-interface* "localhost")
 
+(defvar *running-on-port* nil)
+(defvar *running-on-interface* "localhost")
+
 
 (defun start (&key
-              (port *default-port*)
-              (interface *default-interface*)
+              (port (or *running-on-port*
+                        *default-port*))
+              (interface (or *running-on-interface*
+                             *default-interface*))
               (debug t))
+  (setf *running-on-port*
+        port)
+  (setf *running-on-interface*
+        interface)
   (setf (current-theme)
         (make-tailwind-theme))
   (log:info "Starting Codabrus Web UI on ~A:~A" interface port)
@@ -31,7 +40,7 @@
                          :debug debug))
 
 
-(defun stop (&key
-             (port *default-port*)
-             (interface *default-interface*))
-  (reblocks/server:stop interface port))
+(defun stop ()
+  (when *running-on-port*
+    (reblocks/server:stop *running-on-interface*
+                          *running-on-port*)))
