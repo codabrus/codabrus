@@ -13,7 +13,8 @@
                 #:*current-session-actor*
                 #:get-session-messages
                 #:get-stream-chunks
-                #:agent-status)
+                #:agent-status
+                #:*stream-clear-pending*)
   (:import-from #:codabrus/frontend/diagram/builder
                 #:build-diagram-data
                 #:diagram-to-json)
@@ -72,6 +73,9 @@
   (let ((prev-status :free)
         (done-sent nil))
     (loop
+      (when *stream-clear-pending*
+        (setf *stream-clear-pending* nil)
+        (sse-write-event output-stream "stream-clear" ""))
       (let ((chunks (get-stream-chunks)))
         (when (plusp (length chunks))
           (sse-write-event output-stream "stream-chunk" (sse-encode-data chunks))

@@ -18,9 +18,10 @@
            #:agent-free-p
            #:get-session-messages
            #:reset-session
-           #:get-stream-chunks
-           #:clear-stream-buffer
-           #:agent-status))
+            #:get-stream-chunks
+            #:clear-stream-buffer
+            #:agent-status
+            #:*stream-clear-pending*))
 (in-package #:codabrus/frontend/diagram/session)
 
 
@@ -28,6 +29,7 @@
 
 (defvar *stream-buffer* "")
 (defvar *stream-lock* (bt2:make-lock :name "stream-buffer"))
+(defvar *stream-clear-pending* nil)
 
 
 (defun streaming-callback (chunk)
@@ -129,4 +131,5 @@
   (when *current-session-actor*
     (act:ask *current-session-actor* (list :interrupt)))
   (setf *current-session-actor* nil)
-  (clear-stream-buffer))
+  (clear-stream-buffer)
+  (setf *stream-clear-pending* t))
