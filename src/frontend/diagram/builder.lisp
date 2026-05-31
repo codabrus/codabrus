@@ -50,9 +50,9 @@
         "attrs" (node-attrs role)))
 
 
-(defun make-edge (source target)
-  (dict "source" source
-        "target" target
+(defun make-edge (source target &key (source-anchor "right") (target-anchor "left"))
+  (dict "source" (dict "cell" source "anchor" source-anchor)
+        "target" (dict "cell" target "anchor" target-anchor)
         "router" (dict "name" "manhattan")
         "connector" (dict "name" "rounded")))
 
@@ -153,7 +153,9 @@
                                                 main-chain-x branch-y
                                                 tc-name :tool 160 36)
                                      nodes)
-                               (push (make-edge node-id tc-node-id) edges)
+                               (push (make-edge node-id tc-node-id
+                                                :source-anchor "bottom"
+                                                :target-anchor "top") edges)
                                (setf (gethash tc-id tool-call-id->node-id) tc-node-id)
                                (store-node-data tc-node-id :tool nil
                                                  :tool-call-id tc-id
