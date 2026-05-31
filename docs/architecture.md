@@ -95,15 +95,28 @@ src/frontend/
   server.lisp           — start/stop functions
   routes.lisp           — custom route classes (SSE streaming)
   pages/
-    main.lisp           — main page widget
+    main.lisp           — main page widget (diagram + sidebar + prompt)
   widgets/
     x6-diagram.lisp     — X6 diagram widget with SSE client
+    prompt-input.lisp   — text input + Send/Reset buttons
+    message-popup.lisp  — popup for node content (tool calls, results)
+    thinking-sidebar.lisp — streaming LLM output sidebar
+  diagram/
+    builder.lisp        — builds diagram data (nodes/edges) from messages
+    session.lisp        — LLM session management, stream buffer
   x6/                   — AntV X6 JS library (Vite/IIFE build)
 ```
 
 #### Server-Sent Events (SSE) for live updates
 
-The Web UI uses SSE to push real-time updates from the server to the browser. This is how the X6 diagram widget receives new nodes without page reloads.
+The Web UI uses SSE to push real-time updates from the server to the browser. Two SSE endpoints serve different purposes:
+
+| Endpoint | Route class | Purpose |
+|----------|------------|---------|
+| `/diagram-events` | `diagram-sse-route` | Diagram node/edge updates |
+| `/stream-events` | `stream-sse-route` | Streaming LLM text to sidebar |
+
+##### Diagram SSE (`/diagram-events`)
 
 **How it works:**
 
@@ -115,38 +128,95 @@ Browser                              Server
   │                                    │
   │─── EventSource /diagram-events ──>│  SSE route (diagram-sse-route)
   │                                    │  clack-sse:serve-sse opens stream
-  │<══ event: add-node ═══════════════│  Server loop sends events every 5s
-  │    {id, x, y, label, source}      │
+  │<══ event: init-diagram ═══════════│  Full diagram state (all nodes + edges)
+  │    {"nodes":[...],"edges":[...]}   │
   │                                    │
-  │  JS: graph.addNode(data)           │
-  │  JS: graph.addEdge(source,target)  │
+  │  JS: graph.dispose() + initDiagram │  Clear and recreate graph from data
 ```
 
 **Server side** (`src/frontend/routes.lisp`):
 
 1. A custom route class `diagram-sse-route` inherits from `40ants-routes/route:route`.
 2. `reblocks/routes:serve` is specialized on this class to return `(clack-sse:serve-sse 'handler)`.
-3. `clack-sse:serve-sse` returns a Clack async response function that opens a `text/event-stream` connection.
-4. The stream handler loops, writing SSE-formatted events (`event: add-node\ndata: {...}\n\n`) and flushing output.
-5. The handler runs inside the Clack worker thread for the duration of the connection.
+3. The stream handler polls `get-session-messages()` every 1 second.
+4. When the message count changes, it builds diagram data via `build-diagram-data` and sends an `init-diagram` event with the full JSON (all nodes and edges).
+5. The client disposes the old graph and creates a fresh one from the data.
 
 **Client side** (`src/frontend/widgets/x6-diagram.lisp`):
 
 1. The widget's `get-dependencies` serves the X6 IIFE bundle as a local JS dependency.
 2. The `render` method outputs a container `<div>` and an inline `<script>` that:
    - Initializes the X6 graph via `initDiagram()` and stores it as `window.codabrusGraph`.
+   - Registers `graph.on('node:click')` handler that triggers a Reblocks action to show a popup with node details.
    - Creates an `EventSource` connected to `/diagram-events`.
-   - Listens for `add-node` events, parses JSON data, and calls `graph.addNode()` / `graph.addEdge()` on the X6 graph instance.
+   - On `init-diagram`: disposes old graph, creates new one via `resetDiagram()`, re-registers click handler.
+   - Auto-scrolls viewport to the rightmost node if it's outside the visible area.
 
-**SSE event format:**
-
-```
-event: add-node
-data: {"id":"n3","x":280,"y":120,"width":100,"height":40,"label":"Block 3","source":"n2"}
+**Diagram event format:**
 
 ```
+event: init-diagram
+data: {"nodes":[{"id":"m0","x":80,"y":100,...},...],"edges":[{"source":"m0","target":"m2","router":{"name":"manhattan"},"connector":{"name":"rounded"}},...]}
 
-The `source` field links the new node to a previous node with an edge. If `source` is present, the client creates an edge `{source: data.source, target: data.id}`.
+```
+
+Edges use Manhattan routing with rounded connectors. Main chain edges connect via `right→left` anchors, tool branch edges via `bottom→top` anchors.
+
+##### Streaming SSE (`/stream-events`)
+
+The thinking sidebar shows real-time LLM output as tokens arrive from the API.
+
+**Data flow:**
+
+```
+LLM API (streaming HTTP)
+  → streaming-callback (called per text chunk)
+    → *stream-buffer* (thread-safe, protected by mutex)
+      → SSE poll (every 100ms)
+        → EventSource in browser sidebar
+```
+
+**Server side** (`src/frontend/routes.lisp`):
+
+1. `stream-sse-route` handles `/stream-events`.
+2. On connect: sends `stream-clear` to reset sidebar.
+3. Poll loop (100ms interval):
+   - Reads chunks from `get-stream-chunks()` (returns and clears buffer).
+   - If chunks exist: sends `stream-chunk` event with escaped text.
+   - Tracks `prev-status` to detect transitions:
+     - `:free` → busy: sends `stream-clear` (new request started).
+     - Busy → `:free`: sends `stream-done` once (agent finished).
+4. Text is SSE-encoded: newlines become `\n` (literal backslash-n) to avoid SSE frame splitting.
+
+**Client side** (`src/frontend/widgets/thinking-sidebar.lisp`):
+
+1. Renders a dark terminal-style container (`bg-gray-900`, `text-gray-200`, `font-mono`).
+2. Inline `<script>` creates `EventSource` on `/stream-events`.
+3. Event handlers:
+   - `stream-chunk`: decodes `\n` → newline, appends text node to container, auto-scrolls.
+   - `stream-clear`: clears container text.
+   - `stream-done`: shows "done" status badge.
+
+**Streaming callback chain** (`src/frontend/diagram/session.lisp`):
+
+1. `streaming-callback` — locked append to `*stream-buffer*` (mutex-protected).
+2. `get-stream-chunks` — locked read-and-clear of buffer.
+3. `clear-stream-buffer` — locked clear, called before each new LLM request.
+4. The callback is passed through: `session.lisp` → `make-llm-agent` → `llm-agent` slot → `get-single-completion :streaming-callback`.
+
+**SSE events for streaming:**
+
+```
+event: stream-clear
+data: 
+
+event: stream-chunk
+data: Hello! I'll help you with that.\nLet me check...
+
+event: stream-done
+data: 
+
+```
 
 **Key libraries:**
 
