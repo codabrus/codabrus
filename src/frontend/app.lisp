@@ -15,7 +15,8 @@
   (:import-from #:codabrus/frontend/pages/main
                 #:make-main-page)
   (:import-from #:codabrus/frontend/routes
-                #:diagram-sse-route)
+                #:diagram-sse-route
+                #:stream-sse-route)
   (:export #:app))
 (in-package #:codabrus/frontend/app)
 
@@ -35,6 +36,8 @@
   ((page ("/" :name "index"
               :title "Codabrus")
      (make-main-page))
-   (get ("/diagram-events" :name "diagram-events"
-                           :route-class diagram-sse-route)))
+    (get ("/diagram-events" :name "diagram-events"
+                            :route-class diagram-sse-route))
+   (get ("/stream-events" :name "stream-events"
+                           :route-class stream-sse-route)))
   :page-constructor #'make-page-frame)

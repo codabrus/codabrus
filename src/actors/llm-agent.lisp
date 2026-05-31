@@ -48,9 +48,12 @@
    (interrupted :type boolean
                 :initform nil
                 :accessor llm-agent-interrupted)
-   (tool-registry :type hash-table
-                  :initarg :tool-registry
-                  :reader llm-agent-tool-registry)))
+    (tool-registry :type hash-table
+                   :initarg :tool-registry
+                   :reader llm-agent-tool-registry)
+   (streaming-callback :initform nil
+                       :initarg :streaming-callback
+                       :accessor llm-agent-streaming-callback)))
 
 
 (defmethod print-object ((obj llm-agent) stream)
@@ -58,11 +61,12 @@
     (format stream "~A" (llm-agent-status obj))))
 
 
-(defun make-llm-agent (provider system-prompt tool-registry)
+(defun make-llm-agent (provider system-prompt tool-registry &key streaming-callback)
   (make-clos-actor 'llm-agent
                    :provider provider
                    :system-prompt system-prompt
-                   :tool-registry tool-registry))
+                   :tool-registry tool-registry
+                   :streaming-callback streaming-callback))
 
 
 (defmethod process-message ((obj llm-agent) (message (eql :run)) &key messages on-completion)
@@ -87,15 +91,17 @@
                            (append (list (serapeum:dict "role" "system"
                                                         "content" (llm-agent-system-prompt obj)))
                                    raw-messages)))
-         (caller act:*self*))
-    (tasks:with-context (act:*self*)
-      (sento.tasks:task-async
-       (lambda ()
-         (handler-case
-             (with-log-unhandled ()
-               (multiple-value-bind (type data updated-messages)
-                   (get-single-completion provider api-messages)
-                 (act:ask caller
+          (caller act:*self*)
+          (callback (llm-agent-streaming-callback obj)))
+     (tasks:with-context (act:*self*)
+       (sento.tasks:task-async
+        (lambda ()
+          (handler-case
+              (with-log-unhandled ()
+                (multiple-value-bind (type data updated-messages)
+                    (get-single-completion provider api-messages
+                                           :streaming-callback callback)
+                  (act:ask caller
                           (list :on-llm-response
                                 :type type
                                 :data data
