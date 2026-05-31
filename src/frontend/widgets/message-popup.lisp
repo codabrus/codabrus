@@ -12,6 +12,8 @@
                 #:with-html)
   (:import-from #:reblocks/actions
                 #:make-js-action)
+  (:import-from #:yason
+                #:parse)
   (:import-from #:codabrus/frontend/diagram/builder
                 #:get-node-data)
   (:export #:message-popup
@@ -55,17 +57,73 @@
   (update popup))
 
 
-(defun render-tool-call-section (data)
-  (let ((tool-name (gethash "tool-name" data))
-        (tool-args (gethash "tool-args" data)))
+(defun safe-parse-json (str)
+  (when (and str (stringp str) (plusp (length str)))
+    (handler-case (yason:parse str)
+      (error () nil))))
+
+
+(defun shallow-copy-hash-table (ht)
+  (let ((copy (make-hash-table :test (hash-table-test ht))))
+    (maphash (lambda (k v) (setf (gethash k copy) v)) ht)
+    copy))
+
+
+(defun args-without-explanation (parsed-args)
+  (when parsed-args
+               (let ((copy (shallow-copy-hash-table parsed-args)))
+      (remhash "explanation" copy)
+      copy)))
+
+
+(defun render-bash-call (parsed-args)
+  (let ((command (gethash "command" parsed-args)))
+    (with-html ()
+      (:div :class "mb-2"
+            (:span :class "text-xs text-gray-400" "command")
+            (:br)
+            (:code :class "text-sm text-green-300 bg-gray-900 rounded px-2 py-1 font-mono"
+                   (or command ""))))))
+
+
+(defun render-generic-call (tool-name parsed-args)
+  (declare (ignore tool-name))
+  (with-html ()
+    (:pre :class "text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words bg-gray-50 dark:bg-gray-900 rounded p-2"
+          (let ((copy (shallow-copy-hash-table parsed-args)))
+            (remhash "explanation" copy)
+            (if (plusp (hash-table-count copy))
+                (with-output-to-string (s)
+                  (yason:encode copy s))
+                "")))))
+
+
+(defun render-tool-call (tool-name parsed-args)
+  (cond
+    ((string-equal tool-name "bash")
+     (render-bash-call parsed-args))
+    (t
+     (render-generic-call tool-name parsed-args))))
+
+
+(defun render-tool-section (data)
+  (let* ((tool-name (gethash "tool-name" data))
+         (raw-args (gethash "tool-args" data))
+         (parsed (safe-parse-json raw-args))
+         (explanation (and parsed (gethash "explanation" parsed))))
     (with-html ()
       (:div :class "mb-3 pb-3 border-b border-gray-200 dark:border-gray-600"
-            (:div :class "text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1"
+            (when explanation
+              (with-html ()
+                (:p :class "text-sm text-gray-600 dark:text-gray-300 italic mb-2"
+                    explanation)))
+            (:div :class "text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2"
                   "Call")
-            (:pre :class "text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words bg-gray-50 dark:bg-gray-900 rounded p-2"
-                  (format nil "~A~@[~%~A~]"
-                          (or tool-name "")
-                          (or tool-args "")))))))
+            (if parsed
+                (render-tool-call tool-name parsed)
+                (with-html ()
+                  (:pre :class "text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words bg-gray-50 dark:bg-gray-900 rounded p-2"
+                        (or raw-args ""))))))))
 
 
 (defun render-content-section (role content)
@@ -99,8 +157,8 @@
                                      :onclick hide-js
                                      (:raw "&#215;")))
                       (:div :class "overflow-auto max-h-96"
-                            (when (string= role "tool")
-                              (render-tool-call-section data))
+                             (when (string= role "tool")
+                               (render-tool-section data))
                             (render-content-section role content))))))
       (with-html ()
         (:div :style "display:none"))))
