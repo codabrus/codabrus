@@ -24,17 +24,17 @@
 
 
 (defmethod render ((widget thinking-sidebar) (theme tailwind-theme))
-  (let ((container-id (dom-id widget)))
+  (let ((container-id (format nil "~A-content" (dom-id widget))))
     (with-html ()
-      (:div :class "flex flex-col h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700"
-            (:div :class "px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between"
-                  (:h2 :class "text-sm font-semibold text-gray-700 dark:text-gray-200"
+      (:div :class "flex flex-col h-full bg-gray-900 border-l border-gray-700"
+            (:div :class "px-4 py-3 border-b border-gray-700 flex items-center justify-between"
+                  (:h2 :class "text-sm font-semibold text-gray-300"
                        "Thinking")
                   (:span :id (format nil "~A-status" container-id)
-                         :class "text-xs text-gray-400"
+                         :class "text-xs text-gray-500"
                          ""))
             (:div :id container-id
-                  :class "flex-1 overflow-y-auto p-4 font-mono text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words"))
+                  :class "flex-1 overflow-y-auto p-4 font-mono text-sm text-gray-200 whitespace-pre-wrap break-words"))
       (:script :type "text/javascript"
                (:raw (%make-sidebar-js container-id))))))
 
@@ -49,7 +49,7 @@
   window._codabrusStreamES = es;
   var statusEl = document.getElementById(containerId + '-status');
   es.addEventListener('stream-chunk', function(event) {
-    var text = event.data;
+    var text = event.data.replace(/\\\\n/g, '\\n').replace(/\\\\\\\\/g, '\\\\');
     container.appendChild(document.createTextNode(text));
     container.scrollTop = container.scrollHeight;
     if (statusEl) statusEl.textContent = 'thinking...';

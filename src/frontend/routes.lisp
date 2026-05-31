@@ -51,20 +51,31 @@
   ())
 
 
+(defun sse-encode-data (text)
+  (with-output-to-string (s)
+    (loop for ch across text
+          do (case ch
+               (#\Newline (write-string "\\n" s))
+               (#\\ (write-string "\\\\" s))
+               (t (write-char ch s))))))
+
+
+(defun sse-write-event (output-stream event data)
+  (format output-stream "event: ~A~%data: ~A~%~%" event data)
+  (finish-output output-stream))
+
+
 (defun stream-events-stream (env output-stream)
   (declare (ignore env))
   (log:info "SSE client connected to stream-events")
-  (format output-stream "event: stream-clear~%~%")
-  (finish-output output-stream)
+  (sse-write-event output-stream "stream-clear" "")
   (loop
     (let ((chunks (get-stream-chunks)))
       (when (plusp (length chunks))
-        (format output-stream "event: stream-chunk~%data: ~A~%~%" chunks)
-        (finish-output output-stream)))
+        (sse-write-event output-stream "stream-chunk" (sse-encode-data chunks))))
     (let ((status (agent-status)))
       (when (eq status :free)
-        (format output-stream "event: stream-done~%~%")
-        (finish-output output-stream)))
+        (sse-write-event output-stream "stream-done" "")))
     (sleep 0.1)))
 
 
