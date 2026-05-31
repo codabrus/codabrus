@@ -1,5 +1,28 @@
 import { Graph } from '@antv/x6'
 
+function scrollToRightmost(graph) {
+  const nodes = graph.getNodes()
+  if (!nodes.length) return
+
+  let maxX = -Infinity
+  nodes.forEach(n => {
+    const bbox = n.getBBox()
+    const right = bbox.x + bbox.width
+    if (right > maxX) maxX = right
+  })
+
+  const container = graph.container
+  const viewportWidth = container.clientWidth
+  const scale = graph.zoom()
+  const rightInView = (viewportWidth - 80) / scale
+
+  if (maxX > rightInView) {
+    const dx = rightInView - maxX
+    graph.translate(dx, 0)
+  }
+}
+
+
 function initDiagram(containerId, data) {
   const container = document.getElementById(containerId)
   if (!container) throw new Error(`Container not found: ${containerId}`)
@@ -24,6 +47,8 @@ function initDiagram(containerId, data) {
   if (data?.edges) {
     data.edges.forEach((edge) => graph.addEdge(edge))
   }
+
+  scrollToRightmost(graph)
 
   return graph
 }
