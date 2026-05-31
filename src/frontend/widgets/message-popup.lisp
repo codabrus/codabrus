@@ -55,13 +55,37 @@
   (update popup))
 
 
+(defun render-tool-call-section (data)
+  (let ((tool-name (gethash "tool-name" data))
+        (tool-args (gethash "tool-args" data)))
+    (with-html ()
+      (:div :class "mb-3 pb-3 border-b border-gray-200 dark:border-gray-600"
+            (:div :class "text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1"
+                  "Call")
+            (:pre :class "text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words bg-gray-50 dark:bg-gray-900 rounded p-2"
+                  (format nil "~A~@[~%~A~]"
+                          (or tool-name "")
+                          (or tool-args "")))))))
+
+
+(defun render-content-section (role content)
+  (with-html ()
+    (when (string= role "tool")
+      (with-html ()
+        (:div :class "text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1"
+              "Result")))
+    (:pre :class "text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words"
+          (or content ""))))
+
+
 (defmethod render ((widget message-popup) (theme tailwind-theme))
   (if (popup-visible-p widget)
       (let* ((data (popup-node-data widget))
              (role (gethash "role" data))
              (content (gethash "content" data))
-             (hide-js (make-js-action (lambda (&key &allow-other-keys)
-                                        (hide-popup widget)))))
+             (hide-js (make-js-action
+                       (lambda (&key &allow-other-keys)
+                         (hide-popup widget)))))
         (with-html ()
           (:div :class "fixed inset-0 bg-black/50 flex items-center justify-center z-50"
                 :onclick hide-js
@@ -75,7 +99,8 @@
                                      :onclick hide-js
                                      (:raw "&#215;")))
                       (:div :class "overflow-auto max-h-96"
-                            (:pre :class "text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words"
-                                  (or content "")))))))
+                            (when (string= role "tool")
+                              (render-tool-call-section data))
+                            (render-content-section role content))))))
       (with-html ()
         (:div :style "display:none"))))

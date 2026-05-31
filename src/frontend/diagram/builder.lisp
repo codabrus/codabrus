@@ -57,13 +57,15 @@
         "connector" (dict "name" "rounded")))
 
 
-(defun store-node-data (id role content &key tool-call-id tool-name)
+(defun store-node-data (id role content &key tool-call-id tool-name tool-args)
   (let ((data (dict "role" (string-downcase (symbol-name role))
                     "content" (or content ""))))
     (when tool-call-id
       (setf (gethash "tool-call-id" data) tool-call-id))
     (when tool-name
       (setf (gethash "tool-name" data) tool-name))
+    (when tool-args
+      (setf (gethash "tool-args" data) tool-args))
     (setf (gethash id *node-data*) data)))
 
 
@@ -157,26 +159,27 @@
                                                 :source-anchor "bottom"
                                                 :target-anchor "top") edges)
                                (setf (gethash tc-id tool-call-id->node-id) tc-node-id)
-                               (store-node-data tc-node-id :tool nil
-                                                 :tool-call-id tc-id
-                                                 :tool-name tc-name)
+                                (store-node-data tc-node-id :tool nil
+                                                  :tool-call-id tc-id
+                                                  :tool-name tc-name
+                                                  :tool-args (tool-call-args tc))
                                (setf (gethash node-id branch-y-offsets) (1+ offset))
                                (incf offset))))
                   (setf prev-main-node-id node-id
                         main-chain-x (+ main-chain-x 220))))
 
                ((string= role "tool")
-                (let* ((tc-id (gethash "tool_call_id" msg))
-                       (tc-node-id (gethash tc-id tool-call-id->node-id)))
-                  (when tc-node-id
-                    (let ((label (truncate-string content 25)))
-                      (setf (gethash tc-node-id *node-data*)
-                            (dict "role" "tool"
-                                  "content" (or content "")
-                                  "tool-call-id" tc-id))
-                      (loop for node in nodes
-                            when (string= (gethash "id" node) tc-node-id)
-                            do (setf (gethash "label" node) label))))))))
+                 (let* ((tc-id (gethash "tool_call_id" msg))
+                        (tc-node-id (gethash tc-id tool-call-id->node-id)))
+                   (when tc-node-id
+                     (let ((label (truncate-string content 25))
+                           (existing (gethash tc-node-id *node-data*)))
+                       (when existing
+                         (setf (gethash "content" existing) (or content ""))
+                         (setf (gethash "role" existing) "tool"))
+                       (loop for node in nodes
+                             when (string= (gethash "id" node) tc-node-id)
+                             do (setf (gethash "label" node) label))))))))
     (dict "nodes" (nreverse nodes)
           "edges" (nreverse edges))))
 
