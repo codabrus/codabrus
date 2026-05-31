@@ -26,8 +26,8 @@
   (make-funcall-widget
    (lambda ()
      (with-html ()
-       (:div :class "flex flex-col gap-8 mx-auto max-full px-4 my-8"
-             (:div (render content)))))))
+       (:div :class "h-screen"
+             (render content))))))
 
 
 (defapp app

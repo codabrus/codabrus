@@ -36,10 +36,9 @@
   (with-html ()
     (:div :class "flex flex-col h-screen"
           (:div :class "flex flex-1 overflow-hidden"
-                (:div :class "flex-1 flex flex-col overflow-hidden"
-                      (:div :class "flex-1 overflow-auto"
-                            (render (main-page-diagram widget) theme))
-                      (:div :class "border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800"
-                            (render (main-page-prompt widget) theme)))
+                (:div :class "flex-1 overflow-auto"
+                      (render (main-page-diagram widget) theme))
                 (:div :class "w-80 flex-shrink-0"
-                      (render (main-page-sidebar widget) theme))))))
+                      (render (main-page-sidebar widget) theme)))
+          (:div :class "border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800 flex-shrink-0"
+                (render (main-page-prompt widget) theme)))))
