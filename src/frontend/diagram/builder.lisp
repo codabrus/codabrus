@@ -52,7 +52,9 @@
 
 (defun make-edge (source target)
   (dict "source" source
-        "target" target))
+        "target" target
+        "router" (dict "name" "manhattan")
+        "connector" (dict "name" "rounded")))
 
 
 (defun store-node-data (id role content &key tool-call-id tool-name)
@@ -146,7 +148,7 @@
                             for tc-id = (gethash "id" tc)
                             for tc-name = (tool-call-name tc)
                             for tc-node-id = (format nil "tc_~A" tc-id)
-                            for branch-y = (+ 200 (* offset 100))
+                            for branch-y = (+ 250 (* offset 100))
                             do (push (make-node tc-node-id
                                                 main-chain-x branch-y
                                                 tc-name :tool 160 36)

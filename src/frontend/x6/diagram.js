@@ -9,6 +9,11 @@ function initDiagram(containerId, data) {
     grid: true,
     background: {
       color: '#f5f7fa'
+    },
+    connecting: {
+      router: { name: 'manhattan' },
+      connector: { name: 'rounded' },
+      connectionPoint: { name: 'anchor' }
     }
   })
 
