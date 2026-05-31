@@ -44,6 +44,10 @@
   var containerId = '~A';
   var container = document.getElementById(containerId);
   if (!container) return;
+  var autoScroll = true;
+  container.addEventListener('scroll', function() {
+    autoScroll = (container.scrollTop + container.clientHeight >= container.scrollHeight - 4);
+  });
   if (window._codabrusStreamES) { window._codabrusStreamES.close(); }
   var es = new EventSource('/stream-events');
   window._codabrusStreamES = es;
@@ -51,7 +55,7 @@
   es.addEventListener('stream-chunk', function(event) {
     var text = event.data.replace(/\\\\n/g, '\\n').replace(/\\\\\\\\/g, '\\\\');
     container.appendChild(document.createTextNode(text));
-    container.scrollTop = container.scrollHeight;
+    if (autoScroll) container.scrollTop = container.scrollHeight;
     if (statusEl) statusEl.textContent = 'thinking...';
   });
   es.addEventListener('stream-done', function() {
@@ -59,6 +63,7 @@
   });
   es.addEventListener('stream-clear', function() {
     container.textContent = '';
+    autoScroll = true;
     if (statusEl) statusEl.textContent = '';
   });
   es.addEventListener('error', function() {
