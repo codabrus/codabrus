@@ -38,7 +38,8 @@
           (:div :class "flex flex-1 overflow-hidden"
                 (:div :class "flex-1 overflow-auto"
                       (render (main-page-diagram widget) theme))
-                (:div :class "w-80 flex-shrink-0"
-                      (render (main-page-sidebar widget) theme)))
+                (:div :class "w-80 flex-shrink-0 flex flex-col h-full"
+                      (:div :class "h-full flex-1 min-h-0"
+                            (render (main-page-sidebar widget) theme))))
           (:div :class "border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800 flex-shrink-0"
                 (render (main-page-prompt widget) theme)))))
