@@ -18,5 +18,6 @@
   :in-order-to ((test-op (test-op "codabrus-tests"))))
 
 
+(asdf:register-system-packages "bordeaux-threads" '("BORDEAUX-THREADS-2"))
 (asdf:register-system-packages "log4cl" '("LOG"))
 (asdf:register-system-packages "sento" '("SENTO.ACTOR-SYSTEM" "SENTO.ACTOR-CONTEXT" "SENTO.ACTOR" "SENTO.ACTOR-CELL" "SENTO.EVENTSTREAM" "SENTO.MESSAGEB" "SENTO.STASH" "SENTO.QUEUE"))
