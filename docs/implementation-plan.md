@@ -121,7 +121,7 @@ Goal: sessions survive Lisp image restarts; multiple sessions can coexist.
 - Adapter layer: convert part-based history to the list format `40ants-ai-agents` expects
 - All existing tools return their output wrapped in `tool-result-part`
 
-### 3.3 Session CLI
+### 3.3 Session CLI ✓
 - `codabrus new [project-dir]` — start a new session
 - `codabrus resume [session-id]` — continue an existing session
 - `codabrus list` — show sessions with last message and cost

@@ -10,3 +10,6 @@
 [submodule "libs/completions"]
 	path = libs/completions
 	url = git@github.com:svetlyak40wt/cl-completions.git
+[submodule "libs/reblocks-ui2-sse"]
+	path = libs/reblocks-ui2-sse
+	url = https://github.com/jmorrison/reblocks-ui2-sse.git

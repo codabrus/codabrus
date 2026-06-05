@@ -9,8 +9,15 @@
   :class :40ants-asdf-system
   :defsystem-depends-on ("40ants-asdf-system")
   :pathname "src"
-  :depends-on ("codabrus/core")
+  :depends-on ("codabrus/core"
+               "codabrus/actors/tools/dispatcher"
+               "codabrus/actors/tools/bash"
+               "codabrus/actors/llm-agent"
+               "reblocks"
+               "codabrus/frontend/server")
   :in-order-to ((test-op (test-op "codabrus-tests"))))
 
 
+(asdf:register-system-packages "bordeaux-threads" '("BORDEAUX-THREADS-2"))
 (asdf:register-system-packages "log4cl" '("LOG"))
+(asdf:register-system-packages "sento" '("SENTO.ACTOR-SYSTEM" "SENTO.ACTOR-CONTEXT" "SENTO.ACTOR" "SENTO.ACTOR-CELL" "SENTO.EVENTSTREAM" "SENTO.MESSAGEB" "SENTO.STASH" "SENTO.QUEUE"))

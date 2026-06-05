@@ -288,6 +288,54 @@
 (cdr (assoc :role entry))
 ```
 
+## defmain: subcommands
+
+### Вызов `(subcommand)` — через квалифицированный символ
+
+Макрос `defmain` с `&subcommand` генерирует `flet` с локальной функцией `DEFMAIN:SUBCOMMAND` (в пакете `defmain`), а не в текущем пакете. Вызывать нужно:
+
+```lisp
+;; ПРАВИЛЬНО:
+(defmain:subcommand)
+
+;; НЕПРАВИЛЬНО — создаёт символ CODABRUS/CLI/MAIN::SUBCOMMAND, который unbound:
+(subcommand)
+```
+
+### Аргументы родителя нужно импортировать в подкоманды
+
+`defcommand` передаёт родительские аргументы как параметры функции с символами из родительского пакета (`CODABRUS/CLI/MAIN::MODEL`, `CODABRUS/CLI/MAIN::OUTPUT` и т.д.). Без импорта подкоманда видит свои собственные одноимённые unbound-символы.
+
+```lisp
+;; В пакете подкоманды — обязательно импортировать:
+(:import-from #:codabrus/cli/main
+              #:main
+              #:model
+              #:output
+              #:audit-log
+              #:max-turns
+              #:max-cost-usd)
+```
+
+### CL-символы как имена подкоманд — нужен shadowing
+
+SBCL блокирует пакет COMMON-LISP. `defcommand (main list)` и `defcommand (main do)` падают с `SYMBOL-PACKAGE-LOCKED-ERROR`. Решение — `:shadowing-import-from` в определении пакета:
+
+```lisp
+(uiop:define-package #:codabrus/cli/list
+  (:use #:cl)
+  (:shadowing-import-from #:defmain #:defcommand)
+  ;; или затенить конкретный символ:
+  (:shadow #:list)
+  ...)
+```
+
+Альтернатива — просто использовать другие имена: `ls` вместо `list`, `serve` вместо `do`.
+
+### Родительские и подкомандные аргументы
+
+У подкоманды могут быть свои аргументы (определяются в `defcommand`), и они дополняют родительские. Например, `new` может определить свой `prompt` и `project-dir`, а родительские `model`, `output` и т.д. получает через `&parent-args` (передаются неявно макросом).
+
 ## JSON null представление
 
 `serapeum:dict` с `:null` значением создаёт `(gethash "content" entry)` → `:NULL` (keyword). Проверка `(null ...)` возвращает NIL для `:NULL`. Правильная проверка:
